@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subir archivo Excel</title>
+</head>
+<body>
+    <h1>Subir Excel</h1>
+    {% if message %}
+        <p><strong>{{ message }}</strong></p>
+    {% endif %}
+    <form action="/upload-form" method="post" enctype="multipart/form-data">
+        Empresa: <input type="text" name="empresa"><br><br>
+        Producción (ESP o GL): <input type="text" name="produccion"><br><br>
+        Archivo Excel: <input type="file" name="file"><br><br>
+        <button type="submit">Subir</button>
+    </form>
+</body>
+</html>

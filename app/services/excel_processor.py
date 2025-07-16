@@ -31,10 +31,17 @@ def actualizar_tabla(engine, df, schema, tabla, clave):
     return f"Tabla {tabla} actualizada con {len(df)} registros."
 
 def actualizar_welltest(engine, df, schema, tabla="welltest"):
-    if df.empty or "well" not in df.columns or "INSTALL DATE" not in df.columns:
+    if df.empty or "well" not in df.columns:
         return "Faltan columnas necesarias."
 
-    df = df.rename(columns={"INSTALL DATE": "running"})
+    if 'running' not in df.columns:
+        if 'INSTALL DATE' in df.columns:
+            df.rename(columns={'INSTALL DATE': 'running'}, inplace=True)
+            print("Se ha renombrado la columna 'INSTALL DATE' a 'running'.")
+        else:
+            print("El DataFrame debe contener la columna 'running' o 'INSTALL DATE'.")
+            return "Columna 'running' o 'INSTALL DATE' no encontrada."
+
     df["running"] = pd.to_datetime(df["running"], errors="coerce")
     hoy = datetime.now()
 
@@ -53,6 +60,7 @@ def actualizar_welltest(engine, df, schema, tabla="welltest"):
             )
 
     return "Tabla welltest actualizada."
+
 
 def process_excel_and_update_db(file, empresa, produccion):
     config = load_db_config(empresa)
