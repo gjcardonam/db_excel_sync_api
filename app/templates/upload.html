@@ -1,18 +1,107 @@
 <!DOCTYPE html>
-<html>
-<head>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
     <title>Subir archivo Excel</title>
-</head>
-<body>
-    <h1>Subir Excel</h1>
-    {% if message %}
-        <p><strong>{{ message }}</strong></p>
-    {% endif %}
-    <form action="/upload-form" method="post" enctype="multipart/form-data">
-        Empresa: <input type="text" name="empresa"><br><br>
-        Producción (ESP o GL): <input type="text" name="produccion"><br><br>
-        Archivo Excel: <input type="file" name="file"><br><br>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      :root {
+        --primary: #2e86de;
+        --primary-dark: #1b4f72;
+        --bg: #f9f9f9;
+        --text: #222;
+        --radius: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background-color: var(--bg);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+
+      .container {
+        background: white;
+        padding: 2rem;
+        border-radius: var(--radius);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+        width: 100%;
+        max-width: 420px;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 1.5rem;
+        color: var(--text);
+        font-size: 1.6rem;
+      }
+
+      input[type="text"],
+      input[type="file"] {
+        width: 100%;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: var(--radius);
+        font-size: 1rem;
+      }
+
+      button {
+        width: 100%;
+        padding: 0.75rem;
+        margin-top: 1.2rem;
+        background-color: var(--primary);
+        color: white;
+        font-size: 1rem;
+        border: none;
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.3s ease;
+      }
+
+      button:hover {
+        background-color: var(--primary-dark);
+      }
+
+      .message {
+        margin-top: 1rem;
+        text-align: center;
+        font-weight: bold;
+        color: green;
+      }
+
+      @media (max-width: 480px) {
+        .container {
+          margin: 1rem;
+          padding: 1.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Subir archivo Excel</h1>
+      {% if message %}
+      <div class="message">{{ message }}</div>
+      {% endif %}
+      <form action="/upload-form" method="post" enctype="multipart/form-data">
+        <input type="text" name="empresa" placeholder="Empresa" required />
+        <input
+          type="text"
+          name="produccion"
+          placeholder="Producción (ESP o GL)"
+          required
+        />
+        <input type="file" name="file" required />
         <button type="submit">Subir</button>
-    </form>
-</body>
+      </form>
+    </div>
+  </body>
 </html>
