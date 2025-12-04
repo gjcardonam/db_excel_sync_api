@@ -1,16 +1,16 @@
-# Imagen base ligera con Python
+# Lightweight Python base image
 FROM python:3.11-slim
 
-# Evita preguntas interactivas al instalar paquetes
+# Avoid interactive prompts when installing packages
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Establece el directorio de trabajo en el contenedor
+# Set the working directory in the container
 WORKDIR /app
 
-# Copia solo el archivo de requisitos y lo instala primero (mejor cache)
+# Copy only the requirements file first (better cache usage)
 COPY requirements.txt .
 
-# Instala dependencias del sistema necesarias para pandas, psycopg2 y Excel
+# Install system dependencies required for pandas, psycopg2, and Excel handling
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc \
@@ -26,11 +26,11 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Copia el resto del código
+# Copy the rest of the code
 COPY . .
 
-# Expone el puerto de FastAPI
+# Expose the FastAPI port
 EXPOSE 8484
 
-# Comando de inicio (ajustado al path de tu app)
+# Startup command (adjusted to the app path)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8484"]

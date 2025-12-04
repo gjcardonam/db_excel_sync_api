@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>Choose a Service</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: { extend: {} }
+    }
+  </script>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center p-6">
+  <div class="w-full max-w-4xl bg-gray-800 border border-gray-700 rounded-2xl shadow-xl p-8">
+    <div class="flex flex-col gap-4 text-center mb-10">
+      <p class="text-sm uppercase tracking-[0.2em] text-blue-300">Excel Sync</p>
+      <h1 class="text-3xl font-bold">Select the service you want to use</h1>
+      <p class="text-gray-400">Pick an option below to upload new well configurations or update the WELLHEADER sheet.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 flex flex-col gap-4 shadow-lg hover:border-blue-500 transition">
+        <div>
+          <div class="text-xs uppercase text-gray-400">Service</div>
+          <h2 class="text-xl font-semibold">Upload Well Configuration</h2>
+        </div>
+        <p class="text-gray-300 text-sm">Send the well configuration Excel file, choose the company, and select ESP or GL lift method before processing.</p>
+        <a href="/well-configuration" class="inline-flex items-center justify-center px-4 py-2 rounded bg-blue-600 text-white font-medium hover:bg-blue-700 transition">
+          Go to Well Configuration
+        </a>
+      </div>
+
+      <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 flex flex-col gap-4 shadow-lg hover:border-blue-500 transition">
+        <div>
+          <div class="text-xs uppercase text-gray-400">Service</div>
+          <h2 class="text-xl font-semibold">Update Wellheader</h2>
+        </div>
+        <p class="text-gray-300 text-sm">Upload the Excel file to update WELLHEADER data for the selected company. The sheet name is fixed to WELLHEADER.</p>
+        <a href="/wellheader" class="inline-flex items-center justify-center px-4 py-2 rounded bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition">
+          Go to Wellheader
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

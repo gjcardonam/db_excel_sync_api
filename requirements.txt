@@ -1,9 +1,10 @@
 fastapi
 uvicorn
-jinja2
 python-dotenv
 pandas
 openpyxl
 sqlalchemy
 psycopg2-binary
+python-multipart
+jinja2
 python-multipart

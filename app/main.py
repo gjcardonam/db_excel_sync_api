@@ -1,14 +1,30 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.v1.endpoints.upload import router as upload_router
 from app.api.v1.endpoints.health import router as health_router
-from app.api.v1.endpoints.web import router as web_router  # 👈 nuevo router
+from app.api.v1.endpoints.ui import router as ui_router
+from app.api.v1.endpoints.wellheader import router as wellheader_router
+from app.core.logger import setup_logging, get_logger
 
-app = FastAPI(title="Excel Upload API")
+setup_logging()
+logger = get_logger(__name__)
+
+app = FastAPI(title="Well Configuration API")
 
 # API routes
 app.include_router(upload_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(wellheader_router, prefix="/api/v1")
+app.include_router(ui_router)
 
-# Web form routes (sin prefijo para que / sea la raíz)
-app.include_router(web_router)
+logger.info("Application startup: routers registered.")
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

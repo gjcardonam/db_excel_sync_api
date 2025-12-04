@@ -1,17 +1,24 @@
 from fastapi import APIRouter, Query, HTTPException
-from app.core.config import load_db_config
-from app.core.database import create_pg_engine
 from sqlalchemy import text
 
+from app.core.config import load_db_config
+from app.core.database import create_pg_engine
+from app.core.logger import get_logger
+
 router = APIRouter()
+logger = get_logger(__name__)
+
 
 @router.get("/ping-db")
-def ping_db(empresa: str = Query(...)):
+def ping_db(company: str = Query(...)):
     try:
-        config = load_db_config(empresa)
+        logger.info("DB ping requested", extra={"company": company})
+        config = load_db_config(company)
         engine = create_pg_engine(config)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"status": "success", "message": f"Conexión exitosa a la base de datos de {empresa}"}
+        logger.info("DB ping successful", extra={"company": company})
+        return {"status": "success", "message": f"Successful database connection for {company}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error de conexión: {e}")
+        logger.exception("DB ping failed", extra={"company": company})
+        raise HTTPException(status_code=500, detail=f"Connection error: {e}")
