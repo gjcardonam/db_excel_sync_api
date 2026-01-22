@@ -1,17 +1,10 @@
 from fastapi import APIRouter, Request, HTTPException
-<<<<<<< HEAD
-
-=======
->>>>>>> 357370a3a9a0814e08bbbd86fd015436512dc053
 from app.services.excel_processor import process_excel_and_update_db
 from app.core.logger import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
 
-
-@router.post("/upload/")
-<<<<<<< HEAD
 @router.post("/well-configuration/")
 async def upload_well_configuration(request: Request):
     try:
@@ -40,27 +33,6 @@ async def upload_well_configuration(request: Request):
 
     except HTTPException:
         raise
-=======
-async def upload_excel(request: Request):
-    try:
-        form = await request.form()
-        empresa = form.get("empresa")
-        produccion = form.get("produccion")
-        file = form.get("file[0]")  # 👈 importante si el frontend envía así el nombre
-
-        if not empresa or not produccion or not file:
-            raise HTTPException(status_code=400, detail="Faltan campos o archivo")
-
-        if not file.filename.endswith(".xlsx"):
-            raise HTTPException(status_code=400, detail="El archivo debe ser .xlsx")
-
-        if produccion.upper() not in {"ESP", "GL"}:
-            raise HTTPException(status_code=400, detail="Producción debe ser 'ESP' o 'GL'")
-
-        result = process_excel_and_update_db(file, empresa, produccion.upper())
-        return {"status": "success", "message": result}
-
->>>>>>> 357370a3a9a0814e08bbbd86fd015436512dc053
     except Exception as e:
         logger.exception("Unexpected error processing upload", extra={"company": company, "lift_method": lift_method})
         raise HTTPException(status_code=500, detail=str(e))

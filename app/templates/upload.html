@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <title>Update Wellheader</title>
+  <title>Upload Well Configuration</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -19,8 +19,7 @@
       <a href="/" class="text-sm text-blue-400 hover:text-blue-300">&larr; Back to service selection</a>
       <span class="text-xs uppercase tracking-[0.2em] text-gray-400">Service</span>
     </div>
-    <h1 class="text-2xl font-bold text-center text-gray-100 mb-2">Update Wellheader</h1>
-    <p class="text-center text-gray-400 mb-6 text-sm">Uploads always use the WELLHEADER sheet; no sheet selection is needed.</p>
+    <h1 class="text-2xl font-bold text-center text-gray-100 mb-6">Upload Well Configuration</h1>
 
     {% if message %}
       <div class="bg-blue-900 border border-blue-600 text-blue-200 p-3 rounded mb-4">
@@ -28,7 +27,7 @@
       </div>
     {% endif %}
 
-    <form id="uploadForm" action="/wellheader/process" method="post" enctype="multipart/form-data" class="space-y-4">
+    <form id="uploadForm" action="/well-configuration/process" method="post" enctype="multipart/form-data" class="space-y-4">
       <div>
         <label class="block text-gray-300 font-medium mb-1">Company:</label>
         <select name="company" id="company" class="w-full bg-gray-900 border border-gray-700 rounded p-2 focus:outline-none focus:ring focus:ring-blue-500" required>
@@ -68,17 +67,26 @@
       </div>
 
       <div>
+        <label class="block text-gray-300 font-medium mb-1">Lift Method (ESP/GL):</label>
+        <select name="lift_method" id="lift" class="w-full bg-gray-900 border border-gray-700 rounded p-2 focus:outline-none focus:ring focus:ring-blue-500" required>
+          <option value="">-- Select type --</option>
+          <option>ESP</option>
+          <option>GL</option>
+        </select>
+      </div>
+
+      <div>
         <label class="block text-gray-300 font-medium mb-1">Excel file:</label>
         <input type="file" name="file" id="file" accept=".xlsx" class="w-full text-gray-100 bg-gray-900 border border-gray-700 rounded p-2" required />
       </div>
 
       <div class="text-center">
         <div class="inline-block relative group">
-          <button id="previewAndSubmit" type="button" class="bg-emerald-600 text-white font-medium px-4 py-2 rounded hover:bg-emerald-700 transition">
+          <button id="previewAndSubmit" type="button" class="bg-blue-600 text-white font-medium px-4 py-2 rounded hover:bg-blue-700 transition">
             Process
           </button>
           <div class="absolute left-1/2 -translate-x-1/2 mt-2 w-56 opacity-0 group-hover:opacity-100 pointer-events-none transition bg-gray-700 text-gray-200 text-sm rounded p-2">
-            Click to review wells and company before submitting.
+            Click to review wells, company and lift method before submitting.
           </div>
         </div>
       </div>
@@ -93,10 +101,14 @@
         <p class="text-gray-400 mt-1">Please review the details before proceeding.</p>
       </div>
       <div class="p-6 max-h-[60vh] overflow-auto">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div class="bg-gray-900 rounded p-3 border border-gray-700">
             <div class="text-xs uppercase text-gray-400">Company</div>
             <div id="summaryCompany" class="font-medium text-gray-100">--</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-xs uppercase text-gray-400">Lift Method</div>
+            <div id="summaryLift" class="font-medium text-gray-100">--</div>
           </div>
           <div class="bg-gray-900 rounded p-3 border border-gray-700">
             <div class="text-xs uppercase text-gray-400">Wells Count</div>
@@ -106,7 +118,7 @@
 
         <div>
           <div class="text-sm text-gray-400 mb-2">
-            Wells to be updated:
+            Wells to be sent:
           </div>
           <ul id="wellsList" class="list-disc pl-5 space-y-1 text-gray-200 text-sm"></ul>
         </div>
@@ -115,7 +127,7 @@
         <button id="cancelBtn" class="px-4 py-2 rounded border border-gray-600 text-gray-300 hover:bg-gray-700">
           Cancel
         </button>
-        <button id="confirmBtn" class="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+        <button id="confirmBtn" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
           Confirm
         </button>
       </div>
@@ -130,9 +142,11 @@
     const confirmBtn = document.getElementById('confirmBtn');
 
     const companyEl = document.getElementById('company');
+    const liftEl = document.getElementById('lift');
     const fileEl = document.getElementById('file');
 
     const summaryCompany = document.getElementById('summaryCompany');
+    const summaryLift = document.getElementById('summaryLift');
     const summaryCount = document.getElementById('summaryCount');
     const wellsList = document.getElementById('wellsList');
 
@@ -153,8 +167,8 @@
       });
     }
 
-    function extractWells(workbook) {
-      const sheetName = 'WELLHEADER';
+    function extractWells(workbook, liftMethod) {
+      const sheetName = liftMethod === 'ESP' ? 'ESP' : 'GAS LIFT';
       const ws = workbook.Sheets[sheetName];
       if (!ws) throw new Error(`Sheet "${sheetName}" was not found in the Excel file.`);
 
@@ -163,20 +177,27 @@
 
       const normalize = (s) => String(s || '').toLowerCase().replace(/\s|_/g, '');
       const candidateRow = json[0];
-      // Look for 'wellname' or 'well'
-      const wellKey = Object.keys(candidateRow).find(k => {
-        const n = normalize(k);
-        return n === 'wellname' || n === 'well';
-      });
+      const wellKey = Object.keys(candidateRow).find(k => normalize(k) === 'well');
 
-      if (!wellKey) throw new Error("Could not find a 'wellname' or 'well' column in the WELLHEADER sheet.");
+      let wells = [];
+      if (wellKey) {
+        wells = json
+          .map(row => row[wellKey])
+          .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+          .map(v => String(v).trim());
+      } else {
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const cell = ws[XLSX.utils.encode_cell({ c: range.s.c, r })];
+          const v = cell?.v;
+          if (v !== undefined && v !== null && String(v).trim() !== '') {
+            wells.push(String(v).trim());
+          }
+        }
+      }
 
-      const wells = json
-        .map(row => row[wellKey])
-        .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
-        .map(v => String(v).trim());
-
-      return wells;
+      // Skip the first well
+      return wells.slice(1);
     }
 
     function openModal() {
@@ -192,21 +213,25 @@
       formEl.reset();
       wellsList.innerHTML = '';
       summaryCompany.textContent = '--';
+      summaryLift.textContent = '--';
       summaryCount.textContent = '0';
     }
 
     btnPreview.addEventListener('click', async () => {
       const company = companyEl.value;
+      const liftMethod = liftEl.value;
       const file = fileEl.files[0];
 
       if (!company) return alert('Please select a company.');
+      if (!liftMethod) return alert('Please select a lift method (ESP/GL).');
       if (!file) return alert('Please choose an Excel (.xlsx) file.');
 
       try {
         const wb = await readWorkbook(file);
-        const wells = extractWells(wb);
+        const wells = extractWells(wb, liftMethod);
 
         summaryCompany.textContent = company;
+        summaryLift.textContent = liftMethod;
         summaryCount.textContent = String(wells.length);
 
         wellsList.innerHTML = '';

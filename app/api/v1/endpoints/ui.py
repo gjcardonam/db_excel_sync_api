@@ -16,13 +16,11 @@ async def render_home(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
 
 
-@router.get("/upload", response_class=HTMLResponse)
 @router.get("/well-configuration", response_class=HTMLResponse)
 async def render_upload_page(request: Request):
     return templates.TemplateResponse("upload.html", {"request": request, "message": ""})
 
 
-@router.post("/process", response_class=HTMLResponse)
 @router.post("/well-configuration/process", response_class=HTMLResponse)
 async def process_excel(
     request: Request,
@@ -38,7 +36,7 @@ async def process_excel(
         if lift not in {"ESP", "GL"}:
             return templates.TemplateResponse("upload.html", {"request": request, "message": "Lift method must be 'ESP' or 'GL'."})
 
-        logger.info("Processing well configuration via UI", extra={"company": company, "lift_method": lift, "filename": file.filename})
+        logger.info("Processing well configuration via UI", extra={"company": company, "lift_method": lift, "upload_filename": file.filename})
         result = process_excel_and_update_db(file, company, lift)
         logger.info("Well configuration processed via UI", extra={"company": company, "lift_method": lift, "result": result})
         return templates.TemplateResponse("upload.html", {"request": request, "message": f"Success: {result}"})

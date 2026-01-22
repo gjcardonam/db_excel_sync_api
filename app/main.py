@@ -3,13 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.endpoints.upload import router as upload_router
 from app.api.v1.endpoints.health import router as health_router
-<<<<<<< HEAD
 from app.api.v1.endpoints.ui import router as ui_router
 from app.api.v1.endpoints.wellheader import router as wellheader_router
 from app.core.logger import setup_logging, get_logger
-=======
-from app.api.v1.endpoints.sync_service_companies import router as sync_service_companies
->>>>>>> 357370a3a9a0814e08bbbd86fd015436512dc053
 
 setup_logging()
 logger = get_logger(__name__)
@@ -19,18 +15,12 @@ app = FastAPI(title="Well Configuration API")
 # Rutas de API
 app.include_router(upload_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
-<<<<<<< HEAD
 app.include_router(wellheader_router, prefix="/api/v1")
 app.include_router(ui_router)
 
 logger.info("Application startup: routers registered.")
 
 # CORS middleware
-=======
-app.include_router(sync_service_companies, prefix="/api/v1")
-
-# Middleware CORS
->>>>>>> 357370a3a9a0814e08bbbd86fd015436512dc053
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
