@@ -33,6 +33,9 @@ async def upload_well_configuration(request: Request):
 
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.warning("Validation error on upload", extra={"company": company, "lift_method": lift_method, "error": str(e)})
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Unexpected error processing upload", extra={"company": company, "lift_method": lift_method})
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
