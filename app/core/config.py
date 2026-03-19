@@ -1,9 +1,12 @@
 import os
 import json
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 def load_db_config(company: str) -> dict:
     prefix = company.upper().replace(" ", "_")
@@ -11,9 +14,9 @@ def load_db_config(company: str) -> dict:
 
     missing = [k for k in required if not os.getenv(f"{prefix}_{k}")]
     if missing:
+        logger.error("Missing DB env vars for %s: %s", prefix, ", ".join(missing))
         raise RuntimeError(
-            f"Missing DB env vars for {prefix}: {', '.join(missing)}. "
-            f"Define them in your .env"
+            f"Database configuration incomplete for company: {company}"
         )
 
     return {

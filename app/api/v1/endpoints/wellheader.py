@@ -26,4 +26,4 @@ async def upload_wellheader(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Unexpected error processing wellheader upload", extra={"company": company, "sheet": sheet_name})
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -21,4 +21,4 @@ def ping_db(company: str = Query(...)):
         return {"status": "success", "message": f"Successful database connection for {company}"}
     except Exception as e:
         logger.exception("DB ping failed", extra={"company": company})
-        raise HTTPException(status_code=500, detail=f"Connection error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database connection failed for {company}")

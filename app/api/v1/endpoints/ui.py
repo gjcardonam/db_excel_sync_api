@@ -41,9 +41,12 @@ async def process_excel(
         logger.info("Well configuration processed via UI", extra={"company": company, "lift_method": lift, "result": result})
         return templates.TemplateResponse("upload.html", {"request": request, "message": f"Success: {result}"})
 
+    except ValueError as e:
+        logger.warning("Validation error processing well configuration via UI", extra={"company": company, "lift_method": lift_method, "error": str(e)})
+        return templates.TemplateResponse("upload.html", {"request": request, "message": str(e)})
     except Exception as e:
         logger.exception("Error processing well configuration via UI", extra={"company": company, "lift_method": lift_method})
-        return templates.TemplateResponse("upload.html", {"request": request, "message": f"Error: {str(e)}"})
+        return templates.TemplateResponse("upload.html", {"request": request, "message": "An unexpected error occurred. Please try again or contact support."})
 
 
 @router.get("/wellheader", response_class=HTMLResponse)
@@ -67,4 +70,4 @@ async def process_wellheader(
         return templates.TemplateResponse("wellheader_upload.html", {"request": request, "message": f"Success: {result}"})
     except Exception as e:
         logger.exception("Error processing wellheader via UI", extra={"company": company})
-        return templates.TemplateResponse("wellheader_upload.html", {"request": request, "message": f"Error: {str(e)}"})
+        return templates.TemplateResponse("wellheader_upload.html", {"request": request, "message": "An unexpected error occurred. Please try again or contact support."})

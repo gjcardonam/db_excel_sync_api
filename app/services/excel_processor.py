@@ -15,7 +15,59 @@ NUMERIC_COLS = [
     "x53x", "x43x", "x33x", "x23x", "x13x", "x03x",
 ]
 
+REQUIRED_PUMP_COEFFICIENTS = [
+    "x5", "x4", "x3", "x2", "x1", "x0",
+    "x51", "x41", "x31", "x21", "x11", "x01",
+]
+
+PUMP2_COEFFICIENTS = [
+    "x52x", "x42x", "x32x", "x22x", "x12x", "x02x",
+    "x53x", "x43x", "x33x", "x23x", "x13x", "x03x",
+]
+
 logger = get_logger(__name__)
+
+
+def validate_pump_coefficients(df):
+    """
+    Validates that all wells have the required pump coefficient values and time_stamp.
+    - All wells must have: x5, x4, x3, x2, x1, x0, x51, x41, x31, x21, x11, x01
+    - If a well has 'pump2', it must also have: x52x, x42x, x32x, x22x, x12x, x02x,
+      x53x, x43x, x33x, x23x, x13x, x03x
+    - time_stamp is always required
+    """
+    errors = []
+
+    if "time_stamp" not in df.columns:
+        errors.append("Missing required column 'time_stamp'.")
+    else:
+        missing_ts = df[df["time_stamp"].isna()]
+        if not missing_ts.empty:
+            wells = missing_ts["well"].tolist() if "well" in df.columns else missing_ts.index.tolist()
+            errors.append(f"Wells missing 'time_stamp': {wells}")
+
+    for col in REQUIRED_PUMP_COEFFICIENTS:
+        if col not in df.columns:
+            errors.append(f"Missing required column '{col}'.")
+            continue
+        missing = df[df[col].isna()]
+        if not missing.empty:
+            wells = missing["well"].tolist() if "well" in df.columns else missing.index.tolist()
+            errors.append(f"Wells missing '{col}': {wells}")
+
+    has_pump2 = "pump2" in df.columns and df["pump2"].notna().any()
+    if has_pump2:
+        for col in PUMP2_COEFFICIENTS:
+            if col not in df.columns:
+                errors.append(f"Missing required column '{col}' (required when pump2 is present).")
+                continue
+            wells_with_pump2 = df[df["pump2"].notna()]
+            missing = wells_with_pump2[wells_with_pump2[col].isna()]
+            if not missing.empty:
+                wells = missing["well"].tolist() if "well" in df.columns else missing.index.tolist()
+                errors.append(f"Wells with pump2 missing '{col}': {wells}")
+
+    return errors
 
 
 def get_table_columns(engine, schema, table):
@@ -118,6 +170,12 @@ def process_excel_and_update_db(file, company, lift_method):
 
     if "well" in df_main.columns:
         df_main = df_main[df_main["well"] != "COPIAFORMATO"]
+
+    validation_errors = validate_pump_coefficients(df_main)
+    if validation_errors:
+        error_msg = "Validation failed: " + "; ".join(validation_errors)
+        logger.warning("Pump coefficient validation failed", extra={"company": company, "errors": validation_errors})
+        raise ValueError(error_msg)
 
     if lift_method == "ESP":
         df_main["gassepef"] = 90

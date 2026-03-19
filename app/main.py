@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.v1.endpoints.upload import router as upload_router
 from app.api.v1.endpoints.health import router as health_router
@@ -11,6 +12,15 @@ setup_logging()
 logger = get_logger(__name__)
 
 app = FastAPI(title="Well Configuration API")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception", extra={"path": request.url.path, "method": request.method})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 # Rutas de API
 app.include_router(upload_router, prefix="/api/v1")
