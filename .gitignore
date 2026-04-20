@@ -21,6 +21,7 @@ Thumbs.db
 *.log
 *.tmp
 *.swp
+logs/
 
 # Variables de entorno
 .env
