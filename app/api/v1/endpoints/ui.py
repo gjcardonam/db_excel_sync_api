@@ -13,12 +13,12 @@ logger = get_logger(__name__)
 
 @router.get("/", response_class=HTMLResponse)
 async def render_home(request: Request):
-    return templates.TemplateResponse("home.html", {"request": request})
+    return templates.TemplateResponse(request, "home.html")
 
 
 @router.get("/well-configuration", response_class=HTMLResponse)
 async def render_upload_page(request: Request):
-    return templates.TemplateResponse("upload.html", {"request": request, "message": ""})
+    return templates.TemplateResponse(request, "upload.html", {"message": ""})
 
 
 @router.post("/well-configuration/process", response_class=HTMLResponse)
@@ -30,28 +30,28 @@ async def process_excel(
 ):
     try:
         if not file.filename.lower().endswith(".xlsx"):
-            return templates.TemplateResponse("upload.html", {"request": request, "message": "File must be .xlsx."})
+            return templates.TemplateResponse(request, "upload.html", {"message": "File must be .xlsx."})
 
         lift = lift_method.upper()
         if lift not in {"ESP", "GL"}:
-            return templates.TemplateResponse("upload.html", {"request": request, "message": "Lift method must be 'ESP' or 'GL'."})
+            return templates.TemplateResponse(request, "upload.html", {"message": "Lift method must be 'ESP' or 'GL'."})
 
         logger.info("Processing well configuration via UI", extra={"company": company, "lift_method": lift, "upload_filename": file.filename})
         result = process_excel_and_update_db(file, company, lift)
         logger.info("Well configuration processed via UI", extra={"company": company, "lift_method": lift, "result": result})
-        return templates.TemplateResponse("upload.html", {"request": request, "message": f"Success: {result}"})
+        return templates.TemplateResponse(request, "upload.html", {"message": f"Success: {result}"})
 
     except ValueError as e:
         logger.warning("Validation error processing well configuration via UI", extra={"company": company, "lift_method": lift_method, "error": str(e)})
-        return templates.TemplateResponse("upload.html", {"request": request, "message": str(e)})
+        return templates.TemplateResponse(request, "upload.html", {"message": str(e)})
     except Exception as e:
         logger.exception("Error processing well configuration via UI", extra={"company": company, "lift_method": lift_method})
-        return templates.TemplateResponse("upload.html", {"request": request, "message": "An unexpected error occurred. Please try again or contact support."})
+        return templates.TemplateResponse(request, "upload.html", {"message": "An unexpected error occurred. Please try again or contact support."})
 
 
 @router.get("/wellheader", response_class=HTMLResponse)
 async def render_wellheader_page(request: Request):
-    return templates.TemplateResponse("wellheader_upload.html", {"request": request, "message": ""})
+    return templates.TemplateResponse(request, "wellheader_upload.html", {"message": ""})
 
 
 @router.post("/wellheader/process", response_class=HTMLResponse)
@@ -62,12 +62,12 @@ async def process_wellheader(
 ):
     try:
         if not file.filename.lower().endswith(".xlsx"):
-            return templates.TemplateResponse("wellheader_upload.html", {"request": request, "message": "File must be .xlsx."})
+            return templates.TemplateResponse(request, "wellheader_upload.html", {"message": "File must be .xlsx."})
 
         logger.info("Processing wellheader via UI", extra={"company": company, "upload_filename": file.filename})
         result = update_wellheader_from_excel(file, company, "WELLHEADER")
         logger.info("Wellheader processed via UI", extra={"company": company, "result": result})
-        return templates.TemplateResponse("wellheader_upload.html", {"request": request, "message": f"Success: {result}"})
+        return templates.TemplateResponse(request, "wellheader_upload.html", {"message": f"Success: {result}"})
     except Exception as e:
         logger.exception("Error processing wellheader via UI", extra={"company": company})
-        return templates.TemplateResponse("wellheader_upload.html", {"request": request, "message": "An unexpected error occurred. Please try again or contact support."})
+        return templates.TemplateResponse(request, "wellheader_upload.html", {"message": "An unexpected error occurred. Please try again or contact support."})
