@@ -8,6 +8,9 @@ pipeline {
     GIT_URL    = "git@github-db-excel:gjcardonam/db_excel_sync_api.git"
     GIT_BRANCH = "master"
   }
+  triggers {
+    pollSCM('H/2 * * * *')
+  }
   stages {
     stage('Checkout') {
       steps { git branch: "${GIT_BRANCH}", url: "${GIT_URL}" }
