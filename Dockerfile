@@ -35,10 +35,6 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 COPY . .
 
-# Run as a non-root user.
-RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
-USER appuser
-
 EXPOSE 8484
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
