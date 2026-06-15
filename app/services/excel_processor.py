@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pandas as pd
 from sqlalchemy import inspect, text
@@ -128,8 +128,11 @@ def bulk_flag_welltest(conn, df, schema, table="welltest"):
             return f"{table}: missing 'running' (or 'INSTALL DATE'). Skipped."
 
     df = df.copy()
-    df["running"] = pd.to_datetime(df["running"], errors="coerce")
-    now_ts = datetime.now()
+    # welltest.time_stamp is `timestamptz`. Use timezone-aware UTC values on BOTH
+    # ends of the window so the comparison is unambiguous regardless of the DB
+    # session timezone. Naive Excel dates are interpreted as UTC.
+    df["running"] = pd.to_datetime(df["running"], errors="coerce", utc=True)
+    now_ts = datetime.now(UTC)
 
     params = [
         {"well": row["well"], "start": row["running"], "end": now_ts}

@@ -68,10 +68,18 @@ become underscores to form the prefix (e.g. `ACME` → `ACME_HOST`).
 ## Testing & linting
 
 ```bash
-python -m pytest          # run the test suite
+python -m pytest          # unit tests (DB is mocked; integration tests skip)
 python -m ruff check .     # lint
 python -m ruff format .    # format
 pre-commit install        # enable git hooks (optional)
+```
+
+**Integration tests** under `tests/integration/` exercise the real
+Postgres-specific SQL. They are skipped unless `IT_DATABASE_URL` is set, and each
+test uses a throwaway schema that is dropped on teardown:
+
+```bash
+IT_DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/db python -m pytest tests/integration
 ```
 
 ## Docker
