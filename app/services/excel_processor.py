@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import pandas as pd
@@ -7,67 +8,31 @@ from app.core.config import load_db_config
 from app.core.database import get_engine
 from app.core.logger import get_logger
 from app.utils.excel_reader import read_excel
-
-NUMERIC_COLS = [
-    "x5", "x4", "x3", "x2", "x1", "x0",
-    "x51", "x41", "x31", "x21", "x11", "x01",
-    "x52x", "x42x", "x32x", "x22x", "x12x", "x02x",
-    "x53x", "x43x", "x33x", "x23x", "x13x", "x03x",
-]
-
-REQUIRED_PUMP_COEFFICIENTS = [
-    "x5", "x4", "x3", "x2", "x1", "x0",
-    "x51", "x41", "x31", "x21", "x11", "x01",
-]
-
-PUMP2_COEFFICIENTS = [
-    "x52x", "x42x", "x32x", "x22x", "x12x", "x02x",
-    "x53x", "x43x", "x33x", "x23x", "x13x", "x03x",
-]
+from app.validation import (
+    COPIAFORMATO,
+    NUMERIC_COLS,
+    ExcelValidationError,
+    Severity,
+    ValidationContext,
+    ValidationIssue,
+    Validator,
+    data_validator,
+    template_validator,
+)
 
 logger = get_logger(__name__)
 
 
-def validate_pump_coefficients(df):
-    """
-    Validates that all wells have the required pump coefficient values and time_stamp.
-    - All wells must have: x5, x4, x3, x2, x1, x0, x51, x41, x31, x21, x11, x01
-    - If a well has 'pump2', it must also have: x52x, x42x, x32x, x22x, x12x, x02x,
-      x53x, x43x, x33x, x23x, x13x, x03x
-    - time_stamp is always required
-    """
-    errors = []
+@dataclass
+class ProcessResult:
+    """Outcome of an upload: a success summary plus any non-blocking warnings."""
 
-    if "time_stamp" not in df.columns:
-        errors.append("Missing required column 'time_stamp'.")
-    else:
-        missing_ts = df[df["time_stamp"].isna()]
-        if not missing_ts.empty:
-            wells = missing_ts["well"].tolist() if "well" in df.columns else missing_ts.index.tolist()
-            errors.append(f"Wells missing 'time_stamp': {wells}")
+    message: str
+    warnings: list[str] = field(default_factory=list)
 
-    for col in REQUIRED_PUMP_COEFFICIENTS:
-        if col not in df.columns:
-            errors.append(f"Missing required column '{col}'.")
-            continue
-        missing = df[df[col].isna()]
-        if not missing.empty:
-            wells = missing["well"].tolist() if "well" in df.columns else missing.index.tolist()
-            errors.append(f"Wells missing '{col}': {wells}")
 
-    has_pump2 = "pump2" in df.columns and df["pump2"].notna().any()
-    if has_pump2:
-        for col in PUMP2_COEFFICIENTS:
-            if col not in df.columns:
-                errors.append(f"Missing required column '{col}' (required when pump2 is present).")
-                continue
-            wells_with_pump2 = df[df["pump2"].notna()]
-            missing = wells_with_pump2[wells_with_pump2[col].isna()]
-            if not missing.empty:
-                wells = missing["well"].tolist() if "well" in df.columns else missing.index.tolist()
-                errors.append(f"Wells with pump2 missing '{col}': {wells}")
-
-    return errors
+def _drop_copiaformato(df: pd.DataFrame, key_column: str) -> pd.DataFrame:
+    return df[df[key_column].astype(str).str.strip().str.upper() != COPIAFORMATO]
 
 
 def get_table_columns(conn, schema, table):
@@ -157,83 +122,99 @@ def bulk_flag_welltest(conn, df, schema, table="welltest"):
     return f"{table}: flagged process='x' windows for {len(params)} wells."
 
 
-def process_excel_and_update_db(file, company, lift_method):
+def process_excel_and_update_db(file, company, lift_method) -> ProcessResult:
     """
     Processing order:
-      1) Update main table (dbesp/dbgl)
-      2) For GL only, update installrecordgl from 'VALVULAS'
-      3) Finally, flag welltest rows (process='x')
+      1) Validate template integrity (COPIAFORMATO) and data, then remove the
+         COPIAFORMATO reference row.
+      2) Update main table (dbesp/dbgl).
+      3) For GL only, update installrecordgl from 'VALVULAS'.
+      4) Finally, flag welltest rows (process='x').
+
+    Raises ExcelValidationError on blocking (ERROR) validations. Non-blocking
+    (WARNING) issues are returned in the result so the caller can surface them.
     """
     logger.info("Starting well configuration upload", extra={"company": company, "lift_method": lift_method})
     config = load_db_config(company)
     engine = get_engine(config)
     schema = config["schema"]
 
-    # Main sheet / table
     main_sheet = {"ESP": "ESP", "GL": "GAS LIFT"}[lift_method]
     main_table = {"ESP": "dbesp", "GL": "dbgl"}[lift_method]
 
     df_main = read_excel(file, main_sheet, numeric_cols=NUMERIC_COLS)
     if df_main is None or df_main.empty:
         logger.warning("Main sheet empty or missing", extra={"company": company, "sheet": main_sheet})
-        return "Main sheet empty or not found."
+        raise ExcelValidationError(
+            [ValidationIssue(f"Sheet '{main_sheet}' is empty or not found.", Severity.ERROR)]
+        )
 
-    if "well" in df_main.columns:
-        df_main = df_main[df_main["well"] != "COPIAFORMATO"]
+    warnings: list[ValidationIssue] = []
+    ctx = ValidationContext(company=company, key_column="well", lift_method=lift_method, sheet=main_sheet)
 
-    if lift_method == "ESP":
-        validation_errors = validate_pump_coefficients(df_main)
-        if validation_errors:
-            error_msg = "Validation failed: " + "; ".join(validation_errors)
-            logger.warning("Pump coefficient validation failed", extra={"company": company, "errors": validation_errors})
-            raise ValueError(error_msg)
+    # 1) Template integrity (COPIAFORMATO must be the first row) on the RAW sheet.
+    template_issues = template_validator(ctx).validate(df_main, ctx)
+    if Validator.errors(template_issues):
+        logger.warning("Template validation failed", extra={"company": company, "sheet": main_sheet})
+        raise ExcelValidationError(Validator.errors(template_issues))
+
+    # Now it is safe to drop the reference row.
+    df_main = _drop_copiaformato(df_main, "well")
+    if df_main.empty:
+        raise ExcelValidationError(
+            [ValidationIssue(f"Sheet '{main_sheet}' has no data rows besides '{COPIAFORMATO}'.", Severity.ERROR)]
+        )
+
+    # 2) Data validation on the cleaned rows.
+    data_issues = data_validator(ctx).validate(df_main, ctx)
+    if Validator.errors(data_issues):
+        logger.warning("Data validation failed", extra={"company": company, "errors": [i.message for i in Validator.errors(data_issues)]})
+        raise ExcelValidationError(Validator.errors(data_issues))
+    warnings.extend(Validator.warnings(data_issues))
 
     if lift_method == "ESP":
         df_main["gassepef"] = 90
         df_main["wearfactor1"] = 1
 
-    # If GL, read the VALVULAS sheet up-front so all writes happen in one transaction.
+    # For GL, read + validate VALVULAS up-front so all writes share one transaction.
     df_valves = None
     if lift_method == "GL":
-        df_valves = read_excel(file, "VALVULAS")
+        try:
+            df_valves = read_excel(file, "VALVULAS")
+        except ValueError:
+            df_valves = None
+            warnings.append(
+                ValidationIssue("VALVULAS sheet not found or unreadable; installrecordgl was skipped.", Severity.WARNING)
+            )
+
         if df_valves is not None and not df_valves.empty:
-            if "wellname" in df_valves.columns:
-                df_valves = df_valves[df_valves["wellname"] != "COPIAFORMATO"]
-            df_valves = df_valves.copy()
+            valves_ctx = ValidationContext(company=company, key_column="wellname", lift_method=lift_method, sheet="VALVULAS")
+            valves_issues = template_validator(valves_ctx).validate(df_valves, valves_ctx)
+            if Validator.errors(valves_issues):
+                raise ExcelValidationError(Validator.errors(valves_issues))
+            df_valves = _drop_copiaformato(df_valves, "wellname").copy()
             df_valves["company"] = company
 
-    # All three writes share a single transaction: either everything commits or
-    # nothing does, so a mid-way failure can't leave the schema inconsistent.
+    # All writes share a single transaction: either everything commits or nothing.
     res_install = "installrecordgl: not applicable."
     with engine.begin() as conn:
-        # 1) Update main table
         res_main = upsert_table_by_key(conn, df_main, schema, main_table, key_col="well")
         logger.info("Main table updated", extra={"company": company, "table": main_table, "result": res_main})
 
-        # 2) If GL, update installrecordgl before touching welltest
         if lift_method == "GL":
             if df_valves is not None and not df_valves.empty:
-                res_install = upsert_table_by_key(
-                    conn, df_valves, schema, table="installrecordgl", key_col="wellname"
-                )
-                logger.info(
-                    "installrecordgl updated",
-                    extra={"company": company, "table": "installrecordgl", "result": res_install},
-                )
+                res_install = upsert_table_by_key(conn, df_valves, schema, table="installrecordgl", key_col="wellname")
+                logger.info("installrecordgl updated", extra={"company": company, "result": res_install})
             else:
                 res_install = "installrecordgl: VALVULAS sheet empty or not found. Skipped."
-                logger.warning("VALVULAS sheet empty or missing", extra={"company": company, "sheet": "VALVULAS"})
 
-        # 3) Only at the end: update welltest
         res_wt = bulk_flag_welltest(conn, df_main, schema, table="welltest")
 
     logger.info(
         "Well configuration upload completed",
-        extra={
-            "company": company,
-            "lift_method": lift_method,
-            "results": [res_main, res_install, res_wt],
-            "schema": schema,
-        },
+        extra={"company": company, "lift_method": lift_method, "results": [res_main, res_install, res_wt], "schema": schema},
     )
-    return " | ".join([res_main, res_install, res_wt])
+    return ProcessResult(
+        message=" | ".join([res_main, res_install, res_wt]),
+        warnings=[w.message for w in warnings],
+    )

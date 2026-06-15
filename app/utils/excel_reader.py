@@ -15,15 +15,24 @@ def to_float_from_excel(v):
     except Exception:
         return float("nan")
 
+# .xlsx files are ZIP archives; a valid one starts with this local-file-header magic.
+_XLSX_MAGIC = b"PK\x03\x04"
+
+
 def read_excel(file, sheet_name, numeric_cols=None):
+    f = getattr(file, "file", file)
+    if hasattr(f, "seek"):
+        f.seek(0)  # rewind the stream to the start
+
+    # Read once to memory (handles SpooledTemporaryFile safely)
+    content = f.read() if hasattr(f, "read") else file
+
+    # Validate the real file type, not just the extension: a renamed .xls/.csv
+    # or garbage file is rejected up front with a clear message.
+    if not isinstance(content, (bytes, bytearray)) or content[:4] != _XLSX_MAGIC:
+        raise ValueError("The file is not a valid .xlsx workbook (unexpected file signature).")
+
     try:
-
-        f = getattr(file, "file", file)
-        if hasattr(f, "seek"):
-            f.seek(0)              # rewind the stream to the start
-
-        # Read once to memory (handles SpooledTemporaryFile safely)
-        content = f.read() if hasattr(f, "read") else file
         buf = io.BytesIO(content)
 
         # 1) Quick pass to know real headers

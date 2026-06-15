@@ -1,4 +1,5 @@
 from app.api.v1.endpoints import upload
+from app.services.excel_processor import ProcessResult
 from tests.conftest import XLSX_MIME
 
 URL = "/api/v1/well-configuration/"
@@ -29,7 +30,9 @@ def test_invalid_lift_method(client):
 
 def test_success(client, monkeypatch):
     monkeypatch.setattr(
-        upload, "process_excel_and_update_db", lambda file, company, lift: "3 rows"
+        upload,
+        "process_excel_and_update_db",
+        lambda file, company, lift: ProcessResult("3 rows", warnings=["dup W1"]),
     )
     resp = client.post(
         URL,
@@ -40,6 +43,25 @@ def test_success(client, monkeypatch):
     body = resp.json()
     assert body["status"] == "success"
     assert body["message"] == "3 rows"
+    assert body["warnings"] == ["dup W1"]
+
+
+def test_validation_error_lists_issues(client, monkeypatch):
+    from app.validation import ExcelValidationError, Severity, ValidationIssue
+
+    def _raise(file, company, lift):
+        raise ExcelValidationError(
+            [ValidationIssue("COPIAFORMATO row missing.", Severity.ERROR)]
+        )
+
+    monkeypatch.setattr(upload, "process_excel_and_update_db", _raise)
+    resp = client.post(
+        URL,
+        data={"company": "ACME", "lift_method": "ESP"},
+        files={"file": ("wells.xlsx", b"x", XLSX_MIME)},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == ["COPIAFORMATO row missing."]
 
 
 def test_validation_error_maps_to_400(client, monkeypatch):

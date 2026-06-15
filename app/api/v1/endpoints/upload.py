@@ -4,6 +4,8 @@ from fastapi.concurrency import run_in_threadpool
 from app.core.logger import get_logger
 from app.schemas import ErrorResponse, OperationResponse
 from app.services.excel_processor import process_excel_and_update_db
+from app.utils.file_validation import validate_xlsx_filename
+from app.validation import ExcelValidationError
 
 router = APIRouter(tags=["well-configuration"])
 logger = get_logger(__name__)
@@ -27,9 +29,7 @@ async def upload_well_configuration(request: Request):
             logger.warning("Missing fields or file on upload request", extra={"company": company, "lift_method": lift_method})
             raise HTTPException(status_code=400, detail="Missing fields or file.")
 
-        if not file.filename.lower().endswith(".xlsx"):
-            logger.warning("Rejected non-xlsx file", extra={"company": company, "upload_filename": file.filename})
-            raise HTTPException(status_code=400, detail="File must be .xlsx")
+        validate_xlsx_filename(getattr(file, "filename", None))
 
         lift = lift_method.upper()
         if lift not in {"ESP", "GL"}:
@@ -40,13 +40,16 @@ async def upload_well_configuration(request: Request):
         # Heavy, blocking work (pandas + psycopg2) runs in a worker thread so it
         # does not block the async event loop.
         result = await run_in_threadpool(process_excel_and_update_db, file, company, lift)
-        logger.info("Well configuration upload processed", extra={"company": company, "lift_method": lift, "result": result})
-        return {"status": "success", "message": result}
+        logger.info("Well configuration upload processed", extra={"company": company, "lift_method": lift, "warnings": len(result.warnings)})
+        return {"status": "success", "message": result.message, "warnings": result.warnings}
 
     except HTTPException:
         raise
+    except ExcelValidationError as e:
+        logger.warning("Validation failed on upload", extra={"company": company, "lift_method": lift_method, "errors": [i.message for i in e.issues]})
+        raise HTTPException(status_code=400, detail=[i.message for i in e.issues]) from e
     except ValueError as e:
-        logger.warning("Validation error on upload", extra={"company": company, "lift_method": lift_method, "error": str(e)})
+        logger.warning("Bad upload", extra={"company": company, "lift_method": lift_method, "error": str(e)})
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception:
         logger.exception("Unexpected error processing upload", extra={"company": company, "lift_method": lift_method})

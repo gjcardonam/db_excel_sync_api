@@ -22,11 +22,7 @@
     <h1 class="text-2xl font-bold text-center text-gray-100 mb-2">Update Wellheader</h1>
     <p class="text-center text-gray-400 mb-6 text-sm">Uploads always use the WELLHEADER sheet; no sheet selection is needed.</p>
 
-    {% if message %}
-      <div class="bg-blue-900 border border-blue-600 text-blue-200 p-3 rounded mb-4">
-        {{ message }}
-      </div>
-    {% endif %}
+    {% include "_feedback.html" %}
 
     <form id="uploadForm" action="/wellheader/process" method="post" enctype="multipart/form-data" class="space-y-4">
       <div>
@@ -124,6 +120,14 @@
     </div>
   </div>
 
+  <!-- Loading overlay -->
+  <div id="loadingOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50">
+    <div class="flex flex-col items-center gap-3">
+      <div class="h-10 w-10 border-4 border-gray-600 border-t-emerald-500 rounded-full animate-spin"></div>
+      <div class="text-gray-200">Processing… please wait. Do not close this page.</div>
+    </div>
+  </div>
+
   <script>
     const formEl = document.getElementById('uploadForm');
     const btnPreview = document.getElementById('previewAndSubmit');
@@ -178,7 +182,8 @@
         .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
         .map(v => String(v).trim());
 
-      return wells;
+      // Exclude the COPIAFORMATO reference row (the backend skips it too).
+      return wells.filter(w => w.toUpperCase() !== 'COPIAFORMATO');
     }
 
     function openModal() {
@@ -232,6 +237,10 @@
 
     confirmBtn.addEventListener('click', () => {
       closeModal();
+      const overlay = document.getElementById('loadingOverlay');
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+      confirmBtn.disabled = true;
       formEl.submit();
     });
   </script>
