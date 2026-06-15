@@ -14,11 +14,6 @@ __pycache__/
 venv/
 .venv/
 
-# Tests and dev-only files
-tests/
-pytest.ini
-requirements-dev.txt
-
 # Logs and temp
 logs/
 *.log
@@ -29,3 +24,8 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# NOTE: tests/, requirements-dev.txt and pyproject.toml are intentionally kept
+# in the build context so the Dockerfile "test" stage can run the suite. The
+# runtime stage copies only app/ + requirements.txt, so they don't end up in
+# the final image.

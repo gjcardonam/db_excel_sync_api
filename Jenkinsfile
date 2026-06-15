@@ -17,17 +17,13 @@ pipeline {
     }
     stage('Test') {
       steps {
-        sh '''
-          set -e
-          docker run --rm -v "$PWD":/app -w /app \
-            -e LOG_DB_ENABLED=false \
-            python:3.11-slim \
-            sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q"
-        '''
+        // Runs the suite inside the Docker build (works under Docker-in-Docker,
+        // unlike a bind-mounted sibling container). Fails the build on test failure.
+        sh 'docker build --target test -t ${IMAGE}-test .'
       }
     }
     stage('Build image') {
-      steps { sh 'docker build -t ${IMAGE} .' }
+      steps { sh 'docker build --target runtime -t ${IMAGE} .' }
     }
     stage('Deploy (swap)') {
       steps {

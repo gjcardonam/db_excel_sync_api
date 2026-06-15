@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# --- Build stage: install dependencies into an isolated prefix ---
+# --- Build stage: install runtime dependencies into an isolated prefix ---
 FROM python:3.11-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -16,6 +16,30 @@ RUN apt-get update && \
 
 COPY requirements.txt .
 RUN pip install --prefix=/install -r requirements.txt
+
+# --- Test stage: install dev deps and run the suite. ---
+# `docker build --target test` runs this and fails the build if tests fail.
+# (Done inside the build because the CI runs Docker-in-Docker, where bind-mounting
+# the workspace into a sibling container does not work.)
+FROM python:3.11-slim AS test
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    LOG_DB_ENABLED=false \
+    LOG_TO_FILE=false
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev python3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install -r requirements-dev.txt
+
+COPY . .
+RUN python -m pytest -q
 
 # --- Runtime stage: slim image with just what is needed to run ---
 FROM python:3.11-slim AS runtime
@@ -33,7 +57,9 @@ RUN apt-get update && \
 COPY --from=builder /install /usr/local
 
 WORKDIR /app
-COPY . .
+# Copy only what the app needs at runtime (keeps tests/dev files out of the image).
+COPY app/ ./app/
+COPY requirements.txt ./
 
 EXPOSE 8484
 
