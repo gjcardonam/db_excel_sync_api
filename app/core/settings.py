@@ -1,55 +1,58 @@
 """
-Centralized application settings, read from environment variables.
+Centralized, typed application settings (pydantic-settings).
 
-Kept dependency-free (plain os.getenv) because the per-company database
-configuration is dynamic (prefix-based env vars) and does not map cleanly
-to a static settings model. See app/core/config.py for that part.
+Values are read from environment variables (and a local .env file), validated
+at startup so the app fails fast on a bad configuration. The per-company
+database configuration stays dynamic (prefix-based env vars) and lives in
+app/core/config.py — it does not map cleanly to a static settings model.
 """
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _as_bool(value: str | None, default: bool = False) -> bool:
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",  # ignore per-company DB vars (e.g. ACME_HOST)
+    )
 
-
-def _as_list(value: str | None, default: list[str]) -> list[str]:
-    if value is None or not value.strip():
-        return default
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-class Settings:
-    # --- General ---
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-
-    # Console (stdout) logging is always on. File logging is opt-in and off by
-    # default: inside a container, logs belong on stdout, not on an ephemeral file.
-    LOG_TO_FILE: bool = _as_bool(os.getenv("LOG_TO_FILE"), default=False)
-    LOG_FILE: str = os.getenv("LOG_FILE", "logs/app.log")
+    # --- General logging ---
+    LOG_LEVEL: str = "INFO"
+    # Console (stdout) logging is always on. File logging is opt-in: inside a
+    # container, logs belong on stdout, not on an ephemeral file.
+    LOG_TO_FILE: bool = False
+    LOG_FILE: str = "logs/app.log"
 
     # --- CORS ---
-    # Comma-separated list of allowed origins. Defaults to "*" (internal API).
-    CORS_ALLOW_ORIGINS: list[str] = _as_list(os.getenv("CORS_ALLOW_ORIGINS"), ["*"])
+    # Comma-separated list of allowed origins. "*" allows any origin.
+    CORS_ALLOW_ORIGINS: str = "*"
 
-    # --- Database logging (audit) ---
-    # Enabled automatically when a host is provided, unless explicitly disabled.
-    LOG_DB_HOST: str | None = os.getenv("LOG_DB_HOST")
-    LOG_DB_PORT: int = int(os.getenv("LOG_DB_PORT", "5432"))
-    LOG_DB_NAME: str = os.getenv("LOG_DB_NAME", "postgres")
-    LOG_DB_USER: str | None = os.getenv("LOG_DB_USER")
-    LOG_DB_PASSWORD: str | None = os.getenv("LOG_DB_PASSWORD")
-    LOG_DB_TABLE: str = os.getenv("LOG_DB_TABLE", "db_excel_sync_api_logs")
-    LOG_DB_ENABLED: bool = _as_bool(
-        os.getenv("LOG_DB_ENABLED"), default=bool(os.getenv("LOG_DB_HOST"))
-    )
-    # Records below this level are not persisted to the DB (stdout still gets them).
-    LOG_DB_LEVEL: str = os.getenv("LOG_DB_LEVEL", "INFO")
+    # --- Uploads ---
+    # Reject request bodies larger than this (bytes). Defaults to 50 MB.
+    MAX_UPLOAD_BYTES: int = 50 * 1024 * 1024
+
+    # --- Audit logging to Postgres ---
+    LOG_DB_HOST: str | None = None
+    LOG_DB_PORT: int = 5432
+    LOG_DB_NAME: str = "postgres"
+    LOG_DB_USER: str | None = None
+    LOG_DB_PASSWORD: str | None = None
+    LOG_DB_TABLE: str = "db_excel_sync_api_logs"
+    LOG_DB_LEVEL: str = "INFO"
+    # If unset, DB logging is enabled automatically when a host is configured.
+    LOG_DB_ENABLED: bool | None = None
+
+    @property
+    def cors_origins(self) -> list[str]:
+        origins = [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+        return origins or ["*"]
+
+    @property
+    def db_logging_enabled(self) -> bool:
+        if self.LOG_DB_ENABLED is not None:
+            return self.LOG_DB_ENABLED
+        return bool(self.LOG_DB_HOST)
 
 
 settings = Settings()

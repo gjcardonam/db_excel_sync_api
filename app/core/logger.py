@@ -16,7 +16,7 @@ import logging
 import logging.config
 import logging.handlers
 import queue
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.settings import settings
@@ -75,7 +75,7 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
             "timestamp": datetime.fromtimestamp(
-                record.created, tz=timezone.utc
+                record.created, tz=UTC
             ).isoformat(),
             "level": record.levelname,
             "logger": record.name,
@@ -148,7 +148,7 @@ class PostgresLogHandler(logging.Handler):
                     stmt,
                     {
                         "created_at": datetime.fromtimestamp(
-                            record.created, tz=timezone.utc
+                            record.created, tz=UTC
                         ),
                         "level": record.levelname,
                         "logger": record.name,
@@ -167,7 +167,7 @@ class PostgresLogHandler(logging.Handler):
 
 def _build_db_handler() -> PostgresLogHandler | None:
     """Create the Postgres log handler, or return None if unavailable/disabled."""
-    if not (settings.LOG_DB_ENABLED and settings.LOG_DB_HOST):
+    if not (settings.db_logging_enabled and settings.LOG_DB_HOST):
         return None
     try:
         from sqlalchemy import create_engine

@@ -1,8 +1,8 @@
 import pandas as pd
 
 from app.services.excel_processor import (
-    REQUIRED_PUMP_COEFFICIENTS,
     PUMP2_COEFFICIENTS,
+    REQUIRED_PUMP_COEFFICIENTS,
     validate_pump_coefficients,
 )
 

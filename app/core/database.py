@@ -1,7 +1,9 @@
-from functools import lru_cache
-
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
+
+# Cache of engines keyed by connection target, so the connection pool is reused
+# across requests instead of opening (and leaking) a fresh engine every time.
+_ENGINES: dict[tuple, "object"] = {}
 
 
 def create_pg_engine(config: dict, **kwargs):
@@ -17,29 +19,24 @@ def create_pg_engine(config: dict, **kwargs):
     return create_engine(url, pool_pre_ping=True, **kwargs)
 
 
-@lru_cache(maxsize=None)
-def _cached_engine(host, port, database, user, password):
-    return create_pg_engine(
-        {
-            "host": host,
-            "port": port,
-            "database": database,
-            "user": user,
-            "password": password,
-        }
-    )
-
-
 def get_engine(config: dict):
-    """
-    Return a cached engine for the given DB config, creating it once per unique
-    connection target. Reusing the engine preserves the connection pool across
-    requests instead of opening (and leaking) a fresh engine every time.
-    """
-    return _cached_engine(
+    """Return a cached engine for the given DB config, creating it once per target."""
+    key = (
         config["host"],
         config["port"],
         config["database"],
         config["user"],
         config["password"],
     )
+    engine = _ENGINES.get(key)
+    if engine is None:
+        engine = create_pg_engine(config)
+        _ENGINES[key] = engine
+    return engine
+
+
+def dispose_all_engines() -> None:
+    """Dispose every cached engine (and its pool). Call on application shutdown."""
+    for engine in _ENGINES.values():
+        engine.dispose()
+    _ENGINES.clear()

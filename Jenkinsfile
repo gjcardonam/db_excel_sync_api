@@ -15,6 +15,17 @@ pipeline {
     stage('Checkout') {
       steps { git branch: "${GIT_BRANCH}", url: "${GIT_URL}" }
     }
+    stage('Test') {
+      steps {
+        sh '''
+          set -e
+          docker run --rm -v "$PWD":/app -w /app \
+            -e LOG_DB_ENABLED=false \
+            python:3.11-slim \
+            sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q"
+        '''
+      }
+    }
     stage('Build image') {
       steps { sh 'docker build -t ${IMAGE} .' }
     }

@@ -1,6 +1,8 @@
 import io
-import pandas as pd
 from datetime import datetime
+
+import pandas as pd
+
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -48,4 +50,4 @@ def read_excel(file, sheet_name, numeric_cols=None):
         # A bad/corrupt file or a missing sheet is a client error, not a server
         # fault. Raise ValueError so the API layer maps it to HTTP 400.
         logger.exception("Failed to read Excel", extra={"sheet": sheet_name})
-        raise ValueError(f"Error reading the Excel file: {e}")
+        raise ValueError(f"Error reading the Excel file: {e}") from e

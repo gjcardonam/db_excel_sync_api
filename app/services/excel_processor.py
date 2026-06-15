@@ -1,12 +1,12 @@
 from datetime import datetime
 
 import pandas as pd
-from sqlalchemy import text, inspect
+from sqlalchemy import inspect, text
 
-from app.utils.excel_reader import read_excel
 from app.core.config import load_db_config
 from app.core.database import get_engine
 from app.core.logger import get_logger
+from app.utils.excel_reader import read_excel
 
 NUMERIC_COLS = [
     "x5", "x4", "x3", "x2", "x1", "x0",
