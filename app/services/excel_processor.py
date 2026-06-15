@@ -171,11 +171,12 @@ def process_excel_and_update_db(file, company, lift_method):
     if "well" in df_main.columns:
         df_main = df_main[df_main["well"] != "COPIAFORMATO"]
 
-    validation_errors = validate_pump_coefficients(df_main)
-    if validation_errors:
-        error_msg = "Validation failed: " + "; ".join(validation_errors)
-        logger.warning("Pump coefficient validation failed", extra={"company": company, "errors": validation_errors})
-        raise ValueError(error_msg)
+    if lift_method == "ESP":
+        validation_errors = validate_pump_coefficients(df_main)
+        if validation_errors:
+            error_msg = "Validation failed: " + "; ".join(validation_errors)
+            logger.warning("Pump coefficient validation failed", extra={"company": company, "errors": validation_errors})
+            raise ValueError(error_msg)
 
     if lift_method == "ESP":
         df_main["gassepef"] = 90
