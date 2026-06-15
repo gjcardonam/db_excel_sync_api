@@ -18,7 +18,7 @@ async def upload_well_configuration(request: Request):
             raise HTTPException(status_code=400, detail="Missing fields or file.")
 
         if not file.filename.lower().endswith(".xlsx"):
-            logger.warning("Rejected non-xlsx file", extra={"company": company, "filename": file.filename})
+            logger.warning("Rejected non-xlsx file", extra={"company": company, "upload_filename": file.filename})
             raise HTTPException(status_code=400, detail="File must be .xlsx")
 
         lift = lift_method.upper()
@@ -26,7 +26,7 @@ async def upload_well_configuration(request: Request):
             logger.warning("Invalid lift method", extra={"company": company, "lift_method": lift_method})
             raise HTTPException(status_code=400, detail="Lift method must be 'ESP' or 'GL'")
 
-        logger.info("Processing well configuration upload", extra={"company": company, "lift_method": lift, "filename": file.filename})
+        logger.info("Processing well configuration upload", extra={"company": company, "lift_method": lift, "upload_filename": file.filename})
         result = process_excel_and_update_db(file, company, lift)
         logger.info("Well configuration upload processed", extra={"company": company, "lift_method": lift, "result": result})
         return {"status": "success", "message": result}

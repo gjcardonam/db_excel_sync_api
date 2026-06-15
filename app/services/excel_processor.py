@@ -5,7 +5,7 @@ from sqlalchemy import text, inspect
 
 from app.utils.excel_reader import read_excel
 from app.core.config import load_db_config
-from app.core.database import create_pg_engine
+from app.core.database import get_engine
 from app.core.logger import get_logger
 
 NUMERIC_COLS = [
@@ -70,21 +70,23 @@ def validate_pump_coefficients(df):
     return errors
 
 
-def get_table_columns(engine, schema, table):
-    inspector = inspect(engine)
+def get_table_columns(conn, schema, table):
+    inspector = inspect(conn)
     # SQLAlchemy's get_columns(table_name, schema=None)
     cols = inspector.get_columns(table_name=table, schema=schema)
     return [c["name"] for c in cols]
 
 
-def upsert_table_by_key(engine, df, schema, table, key_col):
+def upsert_table_by_key(conn, df, schema, table, key_col):
     """
-    Simple replace-by-key: DELETE ... WHERE key IN (values) + INSERT ALL
+    Simple replace-by-key: DELETE ... WHERE key IN (values) + INSERT ALL.
+    Runs on the caller-provided connection so it participates in a single
+    surrounding transaction.
     """
     if df is None or df.empty:
         return f"{table}: empty DataFrame. Skipped."
 
-    table_cols = get_table_columns(engine, schema, table)
+    table_cols = get_table_columns(conn, schema, table)
     common = [c for c in df.columns if c in table_cols]
     if not common:
         return f"{table}: no common columns between DataFrame and table. Skipped."
@@ -97,20 +99,21 @@ def upsert_table_by_key(engine, df, schema, table, key_col):
     if not key_vals:
         return f"{table}: no non-null values for key '{key_col}'. Skipped."
 
-    with engine.begin() as conn:
-        conn.execute(
-            text(f"DELETE FROM {schema}.{table} WHERE {key_col} = ANY(:vals)"),
-            {"vals": key_vals}
-        )
-        # pandas to_sql accepts a SQLAlchemy connection
-        df_use.to_sql(table, con=conn, schema=schema, if_exists="append", index=False)
+    conn.execute(
+        text(f"DELETE FROM {schema}.{table} WHERE {key_col} = ANY(:vals)"),
+        {"vals": key_vals},
+    )
+    # pandas to_sql accepts a SQLAlchemy connection
+    df_use.to_sql(table, con=conn, schema=schema, if_exists="append", index=False)
 
     return f"{table}: replaced {len(df_use)} rows by key '{key_col}'."
 
 
-def bulk_flag_welltest(engine, df, schema, table="welltest"):
+def bulk_flag_welltest(conn, df, schema, table="welltest"):
     """
-    UPDATE welltest SET process='x' for windows (running, now] per well
+    UPDATE welltest SET process='x' for windows (running, now] per well.
+    Runs on the caller-provided connection (single transaction) and issues the
+    per-well updates as one batched (executemany) statement.
     """
     if df is None or df.empty or "well" not in df.columns:
         logger.warning("Cannot flag welltest: missing 'well' column or empty DataFrame", extra={"table": table, "schema": schema})
@@ -128,23 +131,27 @@ def bulk_flag_welltest(engine, df, schema, table="welltest"):
     df["running"] = pd.to_datetime(df["running"], errors="coerce")
     now_ts = datetime.now()
 
-    with engine.begin() as conn:
-        for _, row in df.iterrows():
-            r = row.get("running")
-            w = row.get("well")
-            if pd.isna(r) or pd.isna(w):
-                continue
-            conn.execute(
-                text(f"""
-                    UPDATE {schema}.{table}
-                    SET process = 'x'
-                    WHERE well = :well
-                      AND time_stamp > :start
-                      AND time_stamp <= :end
-                """),
-                {"well": w, "start": r, "end": now_ts}
-            )
-    return f"{table}: flagged process='x' windows per well."
+    params = [
+        {"well": row["well"], "start": row["running"], "end": now_ts}
+        for _, row in df.iterrows()
+        if not pd.isna(row.get("running")) and not pd.isna(row.get("well"))
+    ]
+    if not params:
+        return f"{table}: no valid (well, running) rows to flag. Skipped."
+
+    conn.execute(
+        text(
+            f"""
+                UPDATE {schema}.{table}
+                SET process = 'x'
+                WHERE well = :well
+                  AND time_stamp > :start
+                  AND time_stamp <= :end
+            """
+        ),
+        params,
+    )
+    return f"{table}: flagged process='x' windows for {len(params)} wells."
 
 
 def process_excel_and_update_db(file, company, lift_method):
@@ -156,7 +163,7 @@ def process_excel_and_update_db(file, company, lift_method):
     """
     logger.info("Starting well configuration upload", extra={"company": company, "lift_method": lift_method})
     config = load_db_config(company)
-    engine = create_pg_engine(config)
+    engine = get_engine(config)
     schema = config["schema"]
 
     # Main sheet / table
@@ -182,36 +189,40 @@ def process_excel_and_update_db(file, company, lift_method):
         df_main["gassepef"] = 90
         df_main["wearfactor1"] = 1
 
-    # 1) Update main table
-    res_main = upsert_table_by_key(engine, df_main, schema, main_table, key_col="well")
-    logger.info("Main table updated", extra={"company": company, "table": main_table, "result": res_main})
-
-    # 2) If GL, update installrecordgl before touching welltest
-    res_install = "installrecordgl: not applicable."
+    # If GL, read the VALVULAS sheet up-front so all writes happen in one transaction.
+    df_valves = None
     if lift_method == "GL":
-        valves_sheet = "VALVULAS"
-        df_valves = read_excel(file, valves_sheet)
-
+        df_valves = read_excel(file, "VALVULAS")
         if df_valves is not None and not df_valves.empty:
             if "wellname" in df_valves.columns:
                 df_valves = df_valves[df_valves["wellname"] != "COPIAFORMATO"]
-
             df_valves = df_valves.copy()
             df_valves["company"] = company
 
-            res_install = upsert_table_by_key(
-                engine, df_valves, schema, table="installrecordgl", key_col="wellname"
-            )
-            logger.info(
-                "installrecordgl updated",
-                extra={"company": company, "table": "installrecordgl", "result": res_install},
-            )
-        else:
-            res_install = "installrecordgl: VALVULAS sheet empty or not found. Skipped."
-            logger.warning("VALVULAS sheet empty or missing", extra={"company": company, "sheet": valves_sheet})
+    # All three writes share a single transaction: either everything commits or
+    # nothing does, so a mid-way failure can't leave the schema inconsistent.
+    res_install = "installrecordgl: not applicable."
+    with engine.begin() as conn:
+        # 1) Update main table
+        res_main = upsert_table_by_key(conn, df_main, schema, main_table, key_col="well")
+        logger.info("Main table updated", extra={"company": company, "table": main_table, "result": res_main})
 
-    # 3) Only at the end: update welltest
-    res_wt = bulk_flag_welltest(engine, df_main, schema, table="welltest")
+        # 2) If GL, update installrecordgl before touching welltest
+        if lift_method == "GL":
+            if df_valves is not None and not df_valves.empty:
+                res_install = upsert_table_by_key(
+                    conn, df_valves, schema, table="installrecordgl", key_col="wellname"
+                )
+                logger.info(
+                    "installrecordgl updated",
+                    extra={"company": company, "table": "installrecordgl", "result": res_install},
+                )
+            else:
+                res_install = "installrecordgl: VALVULAS sheet empty or not found. Skipped."
+                logger.warning("VALVULAS sheet empty or missing", extra={"company": company, "sheet": "VALVULAS"})
+
+        # 3) Only at the end: update welltest
+        res_wt = bulk_flag_welltest(conn, df_main, schema, table="welltest")
 
     logger.info(
         "Well configuration upload completed",

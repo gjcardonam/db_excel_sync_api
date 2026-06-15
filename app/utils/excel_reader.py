@@ -45,5 +45,7 @@ def read_excel(file, sheet_name, numeric_cols=None):
 
         return df
     except Exception as e:
+        # A bad/corrupt file or a missing sheet is a client error, not a server
+        # fault. Raise ValueError so the API layer maps it to HTTP 400.
         logger.exception("Failed to read Excel", extra={"sheet": sheet_name})
-        raise RuntimeError(f"Error reading the Excel file: {e}")
+        raise ValueError(f"Error reading the Excel file: {e}")

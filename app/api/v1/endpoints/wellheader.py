@@ -13,11 +13,11 @@ async def upload_wellheader(
     file: UploadFile = File(...)
 ):
     if not file.filename.lower().endswith(".xlsx"):
-        logger.warning("Rejected non-xlsx file for wellheader upload", extra={"company": company, "filename": file.filename})
+        logger.warning("Rejected non-xlsx file for wellheader upload", extra={"company": company, "upload_filename": file.filename})
         raise HTTPException(status_code=400, detail="File must be .xlsx")
 
     try:
-        logger.info("Processing wellheader upload", extra={"company": company, "sheet": sheet_name, "filename": file.filename})
+        logger.info("Processing wellheader upload", extra={"company": company, "sheet": sheet_name, "upload_filename": file.filename})
         msg = update_wellheader_from_excel(file, company, sheet_name)
         logger.info("Wellheader upload processed", extra={"company": company, "sheet": sheet_name, "result": msg})
         return {"status": "success", "message": msg}

@@ -1,0 +1,31 @@
+# Secrets / local env — never bake into the image
+.env
+copy.env
+
+# VCS / CI
+.git
+.gitignore
+Jenkinsfile
+
+# Python caches and virtualenvs
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+
+# Tests and dev-only files
+tests/
+pytest.ini
+requirements-dev.txt
+
+# Logs and temp
+logs/
+*.log
+*.tmp
+
+# Editor / OS cruft
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
