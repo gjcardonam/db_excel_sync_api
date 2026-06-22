@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload Production</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: { extend: {} }
+    }
+  </script>
+  <!-- SheetJS for reading Excel in the browser -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-gray-800 shadow-lg rounded-lg p-8 w-full max-w-lg border border-gray-700">
+    <div class="flex items-center justify-between mb-6">
+      <a href="/" class="text-sm text-blue-400 hover:text-blue-300">&larr; Back to service selection</a>
+      <span class="text-xs uppercase tracking-[0.2em] text-gray-400">Service</span>
+    </div>
+    <h1 class="text-2xl font-bold text-center text-gray-100 mb-2">Upload Production</h1>
+    <p class="text-center text-gray-400 mb-6 text-sm">Uploads always use the PRODUCCION sheet; no sheet selection is needed.</p>
+
+    {% include "_feedback.html" %}
+
+    <form id="uploadForm" action="/production/process" method="post" enctype="multipart/form-data" class="space-y-4">
+      <div>
+        <label class="block text-gray-300 font-medium mb-1">Company:</label>
+        <select name="company" id="company" class="w-full bg-gray-900 border border-gray-700 rounded p-2 focus:outline-none focus:ring focus:ring-purple-500" required>
+          <option value="">-- Select a company --</option>
+          <option>Akakus</option>
+          <option>Apache</option>
+          <option>Blackbeard</option>
+          <option>Blue Arrow</option>
+          <option>Browning</option>
+          <option>Chord</option>
+          <option>Cholla</option>
+          <option>COP</option>
+          <option>CPX</option>
+          <option>Coterra</option>
+          <option>Crownquest</option>
+          <option>Double Eagle</option>
+          <option>Endeavor</option>
+          <option>Firebird</option>
+          <option>Four Point</option>
+          <option>Iron Orchard</option>
+          <option>Mewbourne</option>
+          <option>Moriah</option>
+          <option>Novo</option>
+          <option>Permian</option>
+          <option>Point</option>
+          <option>Rockport</option>
+          <option>Roxo</option>
+          <option>Sixess</option>
+          <option>SOGC</option>
+          <option>Stephens</option>
+          <option>Sirteoil</option>
+          <option>Titus</option>
+          <option>TRP</option>
+          <option>Upwing</option>
+          <option>VFPetroleum</option>
+          <option>Vital</option>
+          <option>Waha</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-gray-300 font-medium mb-1">Excel file:</label>
+        <input type="file" name="file" id="file" accept=".xlsx" class="w-full text-gray-100 bg-gray-900 border border-gray-700 rounded p-2" required />
+      </div>
+
+      <div class="text-center">
+        <div class="inline-block relative group">
+          <button id="previewAndSubmit" type="button" class="bg-purple-600 text-white font-medium px-4 py-2 rounded hover:bg-purple-700 transition">
+            Process
+          </button>
+          <div class="absolute left-1/2 -translate-x-1/2 mt-2 w-56 opacity-0 group-hover:opacity-100 pointer-events-none transition bg-gray-700 text-gray-200 text-sm rounded p-2">
+            Click to review wells and company before submitting.
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-2xl shadow-xl max-w-2xl w-full border border-gray-700">
+      <div class="p-6 border-b border-gray-700">
+        <h2 class="text-xl font-semibold text-gray-100">Confirm submission</h2>
+        <p class="text-gray-400 mt-1">Please review the details before proceeding.</p>
+      </div>
+      <div class="p-6 max-h-[60vh] overflow-auto">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-xs uppercase text-gray-400">Company</div>
+            <div id="summaryCompany" class="font-medium text-gray-100">--</div>
+          </div>
+          <div class="bg-gray-900 rounded p-3 border border-gray-700">
+            <div class="text-xs uppercase text-gray-400">Wells Count</div>
+            <div id="summaryCount" class="font-medium text-gray-100">0</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-sm text-gray-400 mb-2">
+            Wells to be processed:
+          </div>
+          <ul id="wellsList" class="list-disc pl-5 space-y-1 text-gray-200 text-sm"></ul>
+        </div>
+      </div>
+      <div class="p-6 border-t border-gray-700 flex justify-end gap-3">
+        <button id="cancelBtn" class="px-4 py-2 rounded border border-gray-600 text-gray-300 hover:bg-gray-700">
+          Cancel
+        </button>
+        <button id="confirmBtn" class="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loadingOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50">
+    <div class="flex flex-col items-center gap-3">
+      <div class="h-10 w-10 border-4 border-gray-600 border-t-purple-500 rounded-full animate-spin"></div>
+      <div class="text-gray-200">Processing… please wait. Do not close this page.</div>
+    </div>
+  </div>
+
+  <script>
+    const formEl = document.getElementById('uploadForm');
+    const btnPreview = document.getElementById('previewAndSubmit');
+    const modal = document.getElementById('confirmModal');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const confirmBtn = document.getElementById('confirmBtn');
+
+    const companyEl = document.getElementById('company');
+    const fileEl = document.getElementById('file');
+
+    const summaryCompany = document.getElementById('summaryCompany');
+    const summaryCount = document.getElementById('summaryCount');
+    const wellsList = document.getElementById('wellsList');
+
+    function readWorkbook(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Could not read the file.'));
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const wb = XLSX.read(data, { type: 'array' });
+            resolve(wb);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function extractWells(workbook) {
+      const sheetName = 'PRODUCCION';
+      const ws = workbook.Sheets[sheetName];
+      if (!ws) throw new Error(`Sheet "${sheetName}" was not found in the Excel file.`);
+
+      const json = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+      if (!json.length) return [];
+
+      const normalize = (s) => String(s || '').toLowerCase().replace(/\s|_/g, '');
+      const candidateRow = json[0];
+      // Look for 'wellname' or 'well'
+      const wellKey = Object.keys(candidateRow).find(k => {
+        const n = normalize(k);
+        return n === 'wellname' || n === 'well';
+      });
+
+      if (!wellKey) throw new Error("Could not find a 'wellname' or 'well' column in the PRODUCCION sheet.");
+
+      // Distinct well names (production has many rows per well, one per day).
+      const seen = new Set();
+      const wells = [];
+      json.forEach(row => {
+        const v = row[wellKey];
+        if (v === null || v === undefined) return;
+        const name = String(v).trim();
+        if (!name || name.toUpperCase() === 'COPIAFORMATO') return;
+        if (!seen.has(name)) {
+          seen.add(name);
+          wells.push(name);
+        }
+      });
+      return wells;
+    }
+
+    function openModal() {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+    function closeModal() {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function resetToStart() {
+      formEl.reset();
+      wellsList.innerHTML = '';
+      summaryCompany.textContent = '--';
+      summaryCount.textContent = '0';
+    }
+
+    btnPreview.addEventListener('click', async () => {
+      const company = companyEl.value;
+      const file = fileEl.files[0];
+
+      if (!company) return alert('Please select a company.');
+      if (!file) return alert('Please choose an Excel (.xlsx) file.');
+
+      try {
+        const wb = await readWorkbook(file);
+        const wells = extractWells(wb);
+
+        summaryCompany.textContent = company;
+        summaryCount.textContent = String(wells.length);
+
+        wellsList.innerHTML = '';
+        wells.forEach(w => {
+          const li = document.createElement('li');
+          li.textContent = w;
+          wellsList.appendChild(li);
+        });
+
+        openModal();
+      } catch (err) {
+        console.error(err);
+        alert(err.message || 'There was an error reading the Excel file.');
+      }
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      closeModal();
+      resetToStart();
+    });
+
+    confirmBtn.addEventListener('click', () => {
+      closeModal();
+      const overlay = document.getElementById('loadingOverlay');
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+      confirmBtn.disabled = true;
+      formEl.submit();
+    });
+  </script>
+</body>
+</html>

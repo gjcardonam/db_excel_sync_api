@@ -16,3 +16,12 @@ PUMP2_COEFFICIENTS = [
 
 # All numeric coefficient columns (used by the Excel reader for type coercion).
 NUMERIC_COLS = REQUIRED_PUMP_COEFFICIENTS + PUMP2_COEFFICIENTS
+
+# --- PRODUCCION sheet (daily production / pressures service) ---
+PRODUCTION_REQUIRED_COLUMNS = [
+    "wellname", "docdate", "oil", "water", "gas",
+    "tubingpressure", "casingpressure", "origin",
+]
+
+# Numeric measurement columns (coerced to float by the Excel reader).
+PRODUCTION_NUMERIC_COLS = ["oil", "water", "gas", "tubingpressure", "casingpressure"]

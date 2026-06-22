@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.endpoints.health import router as health_router
+from app.api.v1.endpoints.production import router as production_router
 from app.api.v1.endpoints.ui import router as ui_router
 from app.api.v1.endpoints.upload import router as upload_router
 from app.api.v1.endpoints.wellheader import router as wellheader_router
@@ -74,4 +75,5 @@ app.add_middleware(
 app.include_router(upload_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(wellheader_router, prefix="/api/v1")
+app.include_router(production_router, prefix="/api/v1")
 app.include_router(ui_router)

@@ -6,7 +6,11 @@ This is the single place to wire validations. To add validations later
 from __future__ import annotations
 
 from app.validation.base import ValidationContext, Validator
-from app.validation.constants import PUMP2_COEFFICIENTS, REQUIRED_PUMP_COEFFICIENTS
+from app.validation.constants import (
+    PRODUCTION_REQUIRED_COLUMNS,
+    PUMP2_COEFFICIENTS,
+    REQUIRED_PUMP_COEFFICIENTS,
+)
 from app.validation.rules import (
     CopiaFormatoPresentRule,
     DuplicateKeysRule,
@@ -36,3 +40,13 @@ def data_validator(ctx: ValidationContext) -> Validator:
     # GL: data rules to be defined later — only the common rules apply for now.
 
     return Validator(rules)
+
+
+def production_template_validator(ctx: ValidationContext) -> Validator:
+    """Rules for the PRODUCCION sheet, run before the COPIAFORMATO row is removed."""
+    return Validator([CopiaFormatoPresentRule()])
+
+
+def production_data_validator(ctx: ValidationContext) -> Validator:
+    """Rules for the cleaned PRODUCCION data (COPIAFORMATO already removed)."""
+    return Validator([RequiredColumnsRule(PRODUCTION_REQUIRED_COLUMNS)])
