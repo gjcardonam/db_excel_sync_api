@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from app.core.logger import get_logger
 from app.services.excel_processor import process_excel_and_update_db
 from app.services.production_processor import process_production_and_update_db
+from app.services.wellheader_loader import insert_wellheader_from_excel
 from app.services.wellheader_updater import update_wellheader_from_excel
 from app.utils.file_validation import validate_xlsx_filename
 from app.validation import ExcelValidationError
@@ -101,6 +102,35 @@ async def process_wellheader(
     except Exception:
         logger.exception("Error processing wellheader via UI", extra={"company": company})
         return _render(request, "wellheader_upload.html", error="An unexpected error occurred. Please try again or contact support.")
+
+
+@router.get("/wellheader-insert", response_class=HTMLResponse)
+async def render_wellheader_insert_page(request: Request):
+    return _render(request, "wellheader_insert.html")
+
+
+@router.post("/wellheader-insert/process", response_class=HTMLResponse)
+async def process_wellheader_insert(
+    request: Request,
+    company: str = Form(...),
+    file: UploadFile = File(...),
+):
+    try:
+        validate_xlsx_filename(file.filename)
+
+        logger.info("Processing wellheader insert via UI", extra={"company": company, "upload_filename": file.filename})
+        result = await run_in_threadpool(insert_wellheader_from_excel, file, company, "WELLHEADER")
+        return _render(request, "wellheader_insert.html", success=result.message, warnings=result.warnings)
+
+    except ExcelValidationError as e:
+        logger.warning("Validation failed on wellheader insert via UI", extra={"company": company, "errors": [i.message for i in e.issues]})
+        return _render(request, "wellheader_insert.html", validation=[i.message for i in e.issues])
+    except ValueError as e:
+        logger.warning("Bad wellheader insert via UI", extra={"company": company, "error": str(e)})
+        return _render(request, "wellheader_insert.html", validation=[str(e)])
+    except Exception:
+        logger.exception("Error processing wellheader insert via UI", extra={"company": company})
+        return _render(request, "wellheader_insert.html", error="An unexpected error occurred. Please try again or contact support.")
 
 
 @router.get("/production", response_class=HTMLResponse)

@@ -9,6 +9,7 @@ from app.api.v1.endpoints.production import router as production_router
 from app.api.v1.endpoints.ui import router as ui_router
 from app.api.v1.endpoints.upload import router as upload_router
 from app.api.v1.endpoints.wellheader import router as wellheader_router
+from app.api.v1.endpoints.wellheader_insert import router as wellheader_insert_router
 from app.core.database import dispose_all_engines
 from app.core.logger import get_logger, setup_logging
 from app.core.settings import settings
@@ -75,5 +76,6 @@ app.add_middleware(
 app.include_router(upload_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(wellheader_router, prefix="/api/v1")
+app.include_router(wellheader_insert_router, prefix="/api/v1")
 app.include_router(production_router, prefix="/api/v1")
 app.include_router(ui_router)
