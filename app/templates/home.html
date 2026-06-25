@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <title>Choose a Service</title>
+  <title>Excel Sync</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -12,86 +12,57 @@
   </script>
 </head>
 <body class="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center p-6">
-  <div class="w-full max-w-5xl bg-gray-800 border border-gray-700 rounded-2xl shadow-xl p-8">
-    <div class="flex flex-col gap-3 text-center mb-10">
-      <p class="text-sm uppercase tracking-[0.2em] text-blue-300">Excel Sync</p>
-      <h1 class="text-3xl font-bold">Select the service you want to use</h1>
-      <p class="text-gray-400">Services are grouped by the kind of data they handle. Pick one to get started.</p>
+  <main class="w-full max-w-3xl">
+    <header class="mb-10 text-center">
+      <p class="text-xs uppercase tracking-[0.3em] text-gray-500 mb-2">Excel Sync</p>
+      <h1 class="text-2xl font-semibold text-gray-100">What do you want to upload?</h1>
+    </header>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <!-- Install Report -->
+      <a href="/well-configuration"
+         class="group rounded-xl border border-gray-800 bg-gray-900 p-5 transition hover:border-blue-500/60 hover:bg-gray-800">
+        <div class="flex items-center gap-3">
+          <span class="h-2.5 w-2.5 rounded-full bg-blue-500"></span>
+          <h2 class="text-base font-semibold text-gray-100">Install Report</h2>
+          <span class="ml-auto text-gray-600 group-hover:text-blue-400 transition">&rarr;</span>
+        </div>
+        <p class="mt-2 text-sm text-gray-400">Upload the install report and choose ESP or GL lift method.</p>
+      </a>
+
+      <!-- Insert Wellheader -->
+      <a href="/wellheader-insert"
+         class="group rounded-xl border border-gray-800 bg-gray-900 p-5 transition hover:border-cyan-500/60 hover:bg-gray-800">
+        <div class="flex items-center gap-3">
+          <span class="h-2.5 w-2.5 rounded-full bg-cyan-500"></span>
+          <h2 class="text-base font-semibold text-gray-100">Insert Wellheader</h2>
+          <span class="ml-auto text-gray-600 group-hover:text-cyan-400 transition">&rarr;</span>
+        </div>
+        <p class="mt-2 text-sm text-gray-400">Add new wells. Existing ones are skipped automatically.</p>
+      </a>
+
+      <!-- Update Wellheader -->
+      <a href="/wellheader"
+         class="group rounded-xl border border-gray-800 bg-gray-900 p-5 transition hover:border-emerald-500/60 hover:bg-gray-800">
+        <div class="flex items-center gap-3">
+          <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+          <h2 class="text-base font-semibold text-gray-100">Update Wellheader</h2>
+          <span class="ml-auto text-gray-600 group-hover:text-emerald-400 transition">&rarr;</span>
+        </div>
+        <p class="mt-2 text-sm text-gray-400">Update data for wells that already exist.</p>
+      </a>
+
+      <!-- Upload Production -->
+      <a href="/production"
+         class="group rounded-xl border border-gray-800 bg-gray-900 p-5 transition hover:border-purple-500/60 hover:bg-gray-800">
+        <div class="flex items-center gap-3">
+          <span class="h-2.5 w-2.5 rounded-full bg-purple-500"></span>
+          <h2 class="text-base font-semibold text-gray-100">Upload Production</h2>
+          <span class="ml-auto text-gray-600 group-hover:text-purple-400 transition">&rarr;</span>
+        </div>
+        <p class="mt-2 text-sm text-gray-400">Sync daily production and wellhead pressures.</p>
+      </a>
     </div>
-
-    <!-- Group: Well Configuration -->
-    <section class="mb-10">
-      <div class="flex items-center gap-3 mb-4">
-        <span class="h-2 w-2 rounded-full bg-blue-500"></span>
-        <h2 class="text-sm font-semibold uppercase tracking-[0.15em] text-gray-300">Well Configuration</h2>
-        <div class="flex-1 h-px bg-gray-700"></div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 flex flex-col gap-4 shadow-lg hover:border-blue-500 transition">
-          <div>
-            <div class="text-xs uppercase text-gray-400">Service</div>
-            <h3 class="text-lg font-semibold">Upload Well Configuration</h3>
-          </div>
-          <p class="text-gray-300 text-sm flex-1">Send the well configuration Excel file, choose the company, and select ESP or GL lift method before processing.</p>
-          <a href="/well-configuration" class="inline-flex items-center justify-center px-4 py-2 rounded bg-blue-600 text-white font-medium hover:bg-blue-700 transition">
-            Go to Well Configuration
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Group: Wellheader -->
-    <section class="mb-10">
-      <div class="flex items-center gap-3 mb-4">
-        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-        <h2 class="text-sm font-semibold uppercase tracking-[0.15em] text-gray-300">Wellheader</h2>
-        <div class="flex-1 h-px bg-gray-700"></div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 flex flex-col gap-4 shadow-lg hover:border-cyan-500 transition">
-          <div>
-            <div class="text-xs uppercase text-gray-400">Service</div>
-            <h3 class="text-lg font-semibold">Insert Wellheader</h3>
-          </div>
-          <p class="text-gray-300 text-sm flex-1">Add <span class="text-gray-100 font-medium">new</span> wells from the WELLHEADER sheet. Existing wells are skipped automatically.</p>
-          <a href="/wellheader-insert" class="inline-flex items-center justify-center px-4 py-2 rounded bg-cyan-600 text-white font-medium hover:bg-cyan-700 transition">
-            Go to Insert Wellheader
-          </a>
-        </div>
-
-        <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 flex flex-col gap-4 shadow-lg hover:border-emerald-500 transition">
-          <div>
-            <div class="text-xs uppercase text-gray-400">Service</div>
-            <h3 class="text-lg font-semibold">Update Wellheader</h3>
-          </div>
-          <p class="text-gray-300 text-sm flex-1">Update data for <span class="text-gray-100 font-medium">existing</span> wells from the WELLHEADER sheet for the selected company.</p>
-          <a href="/wellheader" class="inline-flex items-center justify-center px-4 py-2 rounded bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition">
-            Go to Update Wellheader
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Group: Production -->
-    <section>
-      <div class="flex items-center gap-3 mb-4">
-        <span class="h-2 w-2 rounded-full bg-purple-500"></span>
-        <h2 class="text-sm font-semibold uppercase tracking-[0.15em] text-gray-300">Production</h2>
-        <div class="flex-1 h-px bg-gray-700"></div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 flex flex-col gap-4 shadow-lg hover:border-purple-500 transition">
-          <div>
-            <div class="text-xs uppercase text-gray-400">Service</div>
-            <h3 class="text-lg font-semibold">Upload Production</h3>
-          </div>
-          <p class="text-gray-300 text-sm flex-1">Sync daily production and wellhead pressures from the PRODUCCION sheet for the selected company.</p>
-          <a href="/production" class="inline-flex items-center justify-center px-4 py-2 rounded bg-purple-600 text-white font-medium hover:bg-purple-700 transition">
-            Go to Production
-          </a>
-        </div>
-      </div>
-    </section>
-  </div>
+  </main>
 </body>
 </html>

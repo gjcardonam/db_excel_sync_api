@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
 
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import String, inspect, text
 
 from app.core.config import load_db_config
 from app.core.database import get_engine
 from app.core.logger import get_logger
-from app.services.wellheader_updater import _get_column_map
 from app.utils.excel_reader import read_excel
 from app.validation import COPIAFORMATO, ExcelValidationError, Severity, ValidationIssue
 
@@ -14,6 +13,11 @@ logger = get_logger(__name__)
 
 # Show at most this many identifiers in a single warning message.
 _MAX_SHOWN = 25
+
+# Columns that mirror the table's auto-assigned index: id == uwi == entityid.
+# They are filled by the service for each new well, never taken from the sheet.
+_INDEX_COL = "id"
+_MIRROR_COLS = ("id", "uwi", "entityid")
 
 
 @dataclass
@@ -35,11 +39,30 @@ def _short_error(exc: Exception) -> str:
     return str(orig).strip().splitlines()[0]
 
 
+def _wellheader_columns(engine, schema: str, table: str = "wellheader"):
+    """Return ({lowercase: real_name}, {lowercase: sqlalchemy_type}) for the table."""
+    inspector = inspect(engine)
+    cols = inspector.get_columns(table_name=table, schema=schema)
+    colmap = {c["name"].lower(): c["name"] for c in cols}
+    coltypes = {c["name"].lower(): c["type"] for c in cols}
+    return colmap, coltypes
+
+
+def _mirror_value(coltype, n: int):
+    """Cast the index value to match the column type (text columns get a string)."""
+    return str(n) if isinstance(coltype, String) else n
+
+
 def insert_wellheader_from_excel(file, company: str, sheet_name: str = "WELLHEADER") -> WellheaderLoadResult:
     """
     Reads an Excel file and INSERTS new wells into wellheader (as opposed to the
     updater, which updates existing ones). Column headers must match wellheader
     column names.
+
+    The table index is assigned by the service: each new well gets the next
+    increasing number (current ``MAX(id) + 1``) and that same value is written to
+    ``id``, ``uwi`` and ``entityid`` (whichever of those columns exist), so they
+    always match. These three are never taken from the sheet.
 
     Error handling (careful by design):
       * Wells whose ``wellname`` already exists are skipped (warning), never
@@ -84,7 +107,7 @@ def insert_wellheader_from_excel(file, company: str, sheet_name: str = "WELLHEAD
             [ValidationIssue("No rows contain a value for 'wellname'.", Severity.ERROR)]
         )
 
-    colmap = _get_column_map(engine, schema, table="wellheader")
+    colmap, coltypes = _wellheader_columns(engine, schema, table="wellheader")
     insert_cols = [c for c in df.columns if c in colmap]
     if "wellname" not in insert_cols:
         raise ExcelValidationError(
@@ -132,13 +155,30 @@ def insert_wellheader_from_excel(file, company: str, sheet_name: str = "WELLHEAD
             )
         )
 
+    # The id/uwi/entityid columns mirror the table's increasing index and are
+    # assigned by the service, never taken from the sheet.
+    mirror_present = [c for c in _MIRROR_COLS if c in colmap]
+    index_col = colmap.get(_INDEX_COL) or colmap.get("entityid")
+    sheet_cols = [c for c in insert_cols if c not in _MIRROR_COLS]
+
     inserted = 0
     failed: list[str] = []
     with engine.begin() as conn:
+        # Next index value = current max + 1, advanced per inserted row. A failed
+        # row simply leaves a gap (ids stay unique and increasing).
+        next_id = 0
+        if mirror_present and index_col is not None:
+            next_id = int(
+                conn.execute(
+                    text(f'SELECT COALESCE(MAX("{index_col}"), 0) FROM "{schema}"."wellheader"')
+                ).scalar()
+                or 0
+            )
+
         for _, row in df.iterrows():
             # Only insert provided (non-blank) values for matched columns.
             payload = {}
-            for c in insert_cols:
+            for c in sheet_cols:
                 val = row.get(c)
                 if pd.isna(val):
                     continue
@@ -149,18 +189,47 @@ def insert_wellheader_from_excel(file, company: str, sheet_name: str = "WELLHEAD
             if "wellname" not in payload:
                 continue
 
-            cols = list(payload)
-            collist = ", ".join(f'"{colmap[c]}"' for c in cols)
-            placeholders = ", ".join(f":{c}" for c in cols)
-            sql = text(f'INSERT INTO "{schema}"."wellheader" ({collist}) VALUES ({placeholders})')
+            cols_sql = [f'"{colmap[c]}"' for c in payload]
+            params_sql = [f":{c}" for c in payload]
+            binds = dict(payload)
+
+            # Assign the same increasing index to id == uwi == entityid.
+            if mirror_present and index_col is not None:
+                next_id += 1
+                for c in mirror_present:
+                    key = f"_idx_{c}"
+                    cols_sql.append(f'"{colmap[c]}"')
+                    params_sql.append(f":{key}")
+                    binds[key] = _mirror_value(coltypes[c], next_id)
+
+            sql = text(
+                f'INSERT INTO "{schema}"."wellheader" ({", ".join(cols_sql)}) '
+                f'VALUES ({", ".join(params_sql)})'
+            )
 
             try:
                 # SAVEPOINT: a failed row rolls back only itself, the rest proceed.
                 with conn.begin_nested():
-                    conn.execute(sql, payload)
+                    conn.execute(sql, binds)
                 inserted += 1
             except Exception as e:  # noqa: BLE001 - report per-row error, keep going
                 failed.append(f"{row['wellname']} ({_short_error(e)})")
+
+        # We assign 'id' explicitly, which does not advance its backing sequence.
+        # Realign the sequence to the real MAX(id) so future inserts (this tool,
+        # the app, or manual ones using the default) continue without collisions.
+        if inserted and index_col is not None:
+            seq = conn.execute(
+                text("SELECT pg_get_serial_sequence(:tbl, :col)"),
+                {"tbl": f"{schema}.wellheader", "col": index_col},
+            ).scalar()
+            if seq:
+                conn.execute(
+                    text(
+                        f'SELECT setval(:seq, (SELECT MAX("{index_col}") FROM "{schema}"."wellheader"))'
+                    ),
+                    {"seq": seq},
+                )
 
     if failed:
         warnings.append(
