@@ -19,6 +19,17 @@ _MAX_SHOWN = 25
 _INDEX_COL = "id"
 _MIRROR_COLS = ("id", "uwi", "entityid")
 
+# System columns the service fills with a SQL expression when the table has them
+# and the sheet does not provide a value. The service is what creates the wells,
+# so their creation date is "now". Values are trusted SQL literals (not user input).
+_AUTO_FILL_SQL = {
+    "well_creation_date": "CURRENT_DATE",
+}
+
+# Everything the service supplies on its own, so it is never reported as a
+# "missing required column" the user must add to the sheet.
+_SERVICE_FILLED = set(_MIRROR_COLS) | set(_AUTO_FILL_SQL)
+
 
 @dataclass
 class WellheaderLoadResult:
@@ -40,12 +51,20 @@ def _short_error(exc: Exception) -> str:
 
 
 def _wellheader_columns(engine, schema: str, table: str = "wellheader"):
-    """Return ({lowercase: real_name}, {lowercase: sqlalchemy_type}) for the table."""
+    """Inspect the table and return three views of its columns:
+
+    * ``colmap``   -> {lowercase: real_name}
+    * ``coltypes`` -> {lowercase: sqlalchemy_type}
+    * ``required`` -> real names of columns that are NOT NULL **and** have no DB
+      default. These must be supplied (or assigned by the service), otherwise an
+      insert will fail with a not-null violation.
+    """
     inspector = inspect(engine)
     cols = inspector.get_columns(table_name=table, schema=schema)
     colmap = {c["name"].lower(): c["name"] for c in cols}
     coltypes = {c["name"].lower(): c["type"] for c in cols}
-    return colmap, coltypes
+    required = [c["name"] for c in cols if not c.get("nullable", True) and c.get("default") is None]
+    return colmap, coltypes, required
 
 
 def _mirror_value(coltype, n: int):
@@ -62,7 +81,9 @@ def insert_wellheader_from_excel(file, company: str, sheet_name: str = "WELLHEAD
     The table index is assigned by the service: each new well gets the next
     increasing number (current ``MAX(id) + 1``) and that same value is written to
     ``id``, ``uwi`` and ``entityid`` (whichever of those columns exist), so they
-    always match. These three are never taken from the sheet.
+    always match. These three are never taken from the sheet. ``well_creation_date``
+    (when present) is set to the current date, since the service is what creates
+    the wells. All of these are excluded from the missing-required-column check.
 
     Error handling (careful by design):
       * Wells whose ``wellname`` already exists are skipped (warning), never
@@ -107,11 +128,31 @@ def insert_wellheader_from_excel(file, company: str, sheet_name: str = "WELLHEAD
             [ValidationIssue("No rows contain a value for 'wellname'.", Severity.ERROR)]
         )
 
-    colmap, coltypes = _wellheader_columns(engine, schema, table="wellheader")
+    colmap, coltypes, required = _wellheader_columns(engine, schema, table="wellheader")
     insert_cols = [c for c in df.columns if c in colmap]
     if "wellname" not in insert_cols:
         raise ExcelValidationError(
             [ValidationIssue("The wellheader table has no 'wellname' column to insert into.", Severity.ERROR)]
+        )
+
+    # Fail fast: list ALL mandatory columns (NOT NULL, no DB default) that the
+    # sheet does not provide and the service does not auto-fill, so the user fixes
+    # them in one go instead of discovering them one not-null error at a time.
+    provided = {c for c in df.columns if c in colmap}
+    missing_required = sorted(
+        name
+        for name in required
+        if name.lower() not in provided and name.lower() not in _SERVICE_FILLED
+    )
+    if missing_required:
+        raise ExcelValidationError(
+            [
+                ValidationIssue(
+                    "Your file is missing required column(s) for wellheader: "
+                    f"{', '.join(missing_required)}. Add them to the '{sheet_name}' sheet.",
+                    Severity.ERROR,
+                )
+            ]
         )
 
     warnings: list[ValidationIssue] = []
@@ -201,6 +242,13 @@ def insert_wellheader_from_excel(file, company: str, sheet_name: str = "WELLHEAD
                     cols_sql.append(f'"{colmap[c]}"')
                     params_sql.append(f":{key}")
                     binds[key] = _mirror_value(coltypes[c], next_id)
+
+            # Fill service-managed system columns (e.g. well_creation_date) with a
+            # SQL expression when the table has them and the sheet did not provide one.
+            for col, expr in _AUTO_FILL_SQL.items():
+                if col in colmap and col not in payload:
+                    cols_sql.append(f'"{colmap[col]}"')
+                    params_sql.append(expr)
 
             sql = text(
                 f'INSERT INTO "{schema}"."wellheader" ({", ".join(cols_sql)}) '

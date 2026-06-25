@@ -2,9 +2,11 @@
 import io
 
 import pandas as pd
+import pytest
 from sqlalchemy import text
 
 from app.services import wellheader_loader
+from app.validation import ExcelValidationError
 
 
 def _workbook(df: pd.DataFrame) -> io.BytesIO:
@@ -97,3 +99,61 @@ def test_insert_assigns_matching_id_uwi_entityid_and_realigns_sequence(it_schema
         ("W2", 7, 7, 7),
     ]
     assert next_default == 8
+
+
+def test_insert_reports_all_missing_required_columns_upfront(it_schema, monkeypatch):
+    engine, schema = it_schema
+    with engine.begin() as conn:
+        # apinum + well_creation_date are NOT NULL without a default -> the sheet
+        # must provide them. realtime_frequency has a default -> not required.
+        conn.execute(
+            text(
+                f'CREATE TABLE "{schema}".wellheader ('
+                "id serial PRIMARY KEY, uwi int NOT NULL, entityid int NOT NULL, "
+                "wellname text, apinum text NOT NULL, "
+                "well_creation_date timestamptz NOT NULL, "
+                "realtime_frequency int NOT NULL DEFAULT 60)"
+            )
+        )
+
+    monkeypatch.setattr(wellheader_loader, "load_db_config", lambda company: {"schema": schema})
+    monkeypatch.setattr(wellheader_loader, "get_engine", lambda config: engine)
+
+    # Sheet only has wellname -> apinum and well_creation_date are missing.
+    df = pd.DataFrame({"wellname": ["W1"]})
+    with pytest.raises(ExcelValidationError) as exc:
+        wellheader_loader.insert_wellheader_from_excel(_workbook(df), "ACME")
+
+    msg = " ".join(i.message for i in exc.value.issues)
+    # apinum is real data the user must supply; auto-filled/defaulted columns are not.
+    assert "apinum" in msg
+    assert "uwi" not in msg
+    assert "realtime_frequency" not in msg
+    # well_creation_date is service-filled now, so it is NOT reported as missing.
+    assert "well_creation_date" not in msg
+
+
+def test_insert_autofills_well_creation_date(it_schema, monkeypatch):
+    engine, schema = it_schema
+    with engine.begin() as conn:
+        # well_creation_date is NOT NULL without a default -> the service must fill it.
+        conn.execute(
+            text(
+                f'CREATE TABLE "{schema}".wellheader ('
+                "id serial PRIMARY KEY, uwi int NOT NULL, entityid int NOT NULL, "
+                "wellname text, apinum text, well_creation_date date NOT NULL)"
+            )
+        )
+
+    monkeypatch.setattr(wellheader_loader, "load_db_config", lambda company: {"schema": schema})
+    monkeypatch.setattr(wellheader_loader, "get_engine", lambda config: engine)
+
+    df = pd.DataFrame({"wellname": ["W1"], "apinum": ["42-001"]})
+    result = wellheader_loader.insert_wellheader_from_excel(_workbook(df), "ACME")
+
+    assert "inserted 1 new" in result.message
+    with engine.connect() as conn:
+        creation, today = conn.execute(
+            text(f'SELECT well_creation_date, CURRENT_DATE FROM "{schema}".wellheader')
+        ).fetchone()
+    assert creation == today
