@@ -264,19 +264,28 @@ def insert_wellheader_from_excel(file, company: str, sheet_name: str = "WELLHEAD
                 failed.append(f"{row['wellname']} ({_short_error(e)})")
 
         # We assign 'id' explicitly, which does not advance its backing sequence.
-        # Realign the sequence to the real MAX(id) so future inserts (this tool,
-        # the app, or manual ones using the default) continue without collisions.
+        # Best-effort: realign the sequence to MAX(id) so later DEFAULT inserts do
+        # not collide. This needs UPDATE privilege on the sequence; if the DB role
+        # lacks it (or anything else fails), skip inside a SAVEPOINT so the
+        # explicit-id inserts above still commit instead of failing the whole upload.
         if inserted and index_col is not None:
-            seq = conn.execute(
-                text("SELECT pg_get_serial_sequence(:tbl, :col)"),
-                {"tbl": f"{schema}.wellheader", "col": index_col},
-            ).scalar()
-            if seq:
-                conn.execute(
-                    text(
-                        f'SELECT setval(:seq, (SELECT MAX("{index_col}") FROM "{schema}"."wellheader"))'
-                    ),
-                    {"seq": seq},
+            try:
+                with conn.begin_nested():
+                    seq = conn.execute(
+                        text("SELECT pg_get_serial_sequence(:tbl, :col)"),
+                        {"tbl": f"{schema}.wellheader", "col": index_col},
+                    ).scalar()
+                    if seq:
+                        conn.execute(
+                            text(
+                                f'SELECT setval(:seq, (SELECT MAX("{index_col}") FROM "{schema}"."wellheader"))'
+                            ),
+                            {"seq": seq},
+                        )
+            except Exception as e:  # noqa: BLE001 - realignment is best-effort
+                logger.warning(
+                    "Could not realign id sequence (insufficient privilege?); inserts kept",
+                    extra={"company": company, "schema": schema, "error": _short_error(e)},
                 )
 
     if failed:
